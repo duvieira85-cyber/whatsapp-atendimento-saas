@@ -26,14 +26,14 @@ import {
 import {
   Refresh as RefreshIcon,
   Link as LinkIcon,
-  LinkOff as LinkOffIcon,
-  CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Add as AddIcon,
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   PlayArrow as PlayArrowIcon,
+  LinkOff as LinkOffIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import type { Integration } from '../../types';
@@ -96,11 +96,13 @@ const PHASE_COLORS: Record<ConnectionPhase, 'default' | 'info' | 'warning' | 'su
 interface EvolutionCardProps {
   integration: Integration;
   onConnect: (id: string) => void;
-  onDisconnect: (id: string) => void;
+  onDisconnect: (integration: Integration) => void;
+  onRefreshStatus: (integration: Integration) => void;
   onEdit: (integration: Integration) => void;
   onDelete: (integration: Integration) => void;
   onTest: (integration: Integration) => void;
   testingId: string | null;
+  refreshingId: string | null;
 }
 
 function formatPhone(phone: string): string {
@@ -114,10 +116,12 @@ function EvolutionCard({
   integration,
   onConnect,
   onDisconnect,
+  onRefreshStatus,
   onEdit,
   onDelete,
   onTest,
   testingId,
+  refreshingId,
 }: EvolutionCardProps) {
   const isActive = integration.status === 'active' || integration.status === 'connected';
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -163,48 +167,44 @@ function EvolutionCard({
                   flexShrink: 0,
                 }}
               >
-                {providerIcons.evolution}
+                {'\u{1F4F1}'}
               </Box>
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="subtitle1" fontWeight={600} noWrap>
                   {integration.name}
                 </Typography>
-                {isActive && integration.connected_number ? (
+                {integration.connected_number ? (
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                     {formatPhone(integration.connected_number)}
                   </Typography>
                 ) : (
                   <Typography variant="caption" color="text.secondary">
-                    {providerLabels.evolution}
+                    Nenhum n\u00FAmero conectado
                   </Typography>
                 )}
               </Box>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-              {isActive ? (
-                <Chip
-                  icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
-                  label="Conectado"
-                  color="success"
-                  size="small"
-                  sx={{ fontWeight: 500, borderRadius: 1.5 }}
-                />
-              ) : (
-                <Chip
-                  icon={<LinkOffIcon sx={{ fontSize: 14 }} />}
-                  label="Desconectado"
-                  variant="outlined"
-                  size="small"
-                  sx={{ fontWeight: 500, borderRadius: 1.5 }}
-                />
-              )}
+              <Typography variant="body2" fontWeight={500} color={isActive ? 'success.main' : 'text.secondary'}>
+                {isActive ? '\u{1F7E2} Conectado' : '\u{1F534} Desconectado'}
+              </Typography>
               <IconButton size="small" onClick={handleMenuOpen}>
                 <MoreVertIcon fontSize="small" />
               </IconButton>
               <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose} transformOrigin={{ horizontal: 'right', vertical: 'top' }} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}>
-                {!isActive && (
+                {isActive ? (
+                  <MenuItem onClick={() => handleAction(() => onDisconnect(integration))} dense>
+                    <LinkOffIcon sx={{ mr: 1.5, fontSize: 18 }} /> Desconectar WhatsApp
+                  </MenuItem>
+                ) : (
                   <MenuItem onClick={() => handleAction(() => onConnect(integration.id))} dense>
-                    <LinkIcon sx={{ mr: 1.5, fontSize: 18 }} /> Conectar
+                    <LinkIcon sx={{ mr: 1.5, fontSize: 18 }} /> Conectar WhatsApp
+                  </MenuItem>
+                )}
+                {isActive && (
+                  <MenuItem onClick={() => handleAction(() => onRefreshStatus(integration))} dense disabled={refreshingId === integration.id}>
+                    {refreshingId === integration.id ? <CircularProgress size={16} sx={{ mr: 1.5 }} /> : <CheckCircleIcon sx={{ mr: 1.5, fontSize: 18 }} />}
+                    Atualizar Status
                   </MenuItem>
                 )}
                 <MenuItem onClick={() => handleAction(() => onTest(integration))} dense disabled={testingId === integration.id}>
@@ -220,20 +220,6 @@ function EvolutionCard({
               </Menu>
             </Box>
           </Box>
-
-          {!isActive && (
-            <Box sx={{ mt: 2.5, display: 'flex', gap: 1 }}>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<LinkIcon />}
-                onClick={() => onConnect(integration.id)}
-                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, px: 2.5 }}
-              >
-                Conectar
-              </Button>
-            </Box>
-          )}
         </CardContent>
       </Card>
     </Grow>
@@ -519,8 +505,11 @@ export default function IntegrationsPage() {
   const [dialogError, setDialogError] = useState('');
   const [dialogSaving, setDialogSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [disconnectTarget, setDisconnectTarget] = useState<Integration | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info') => {
@@ -732,20 +721,50 @@ export default function IntegrationsPage() {
     }
   };
 
-  const handleDisconnect = async (integrationId: string) => {
+  const handleDisconnectClick = (integration: Integration) => {
+    setDisconnectTarget(integration);
+  };
+
+  const handleDisconnectConfirm = async () => {
+    if (!disconnectTarget) return;
+    setDisconnecting(true);
     try {
-      await api.post(`/integrations/${integrationId}/evolution_disconnect/`);
-    } catch {
-      // ignore
+      await api.post(`/integrations/${disconnectTarget.id}/evolution_disconnect/`);
+      showSnackbar('WhatsApp desconectado com sucesso', 'success');
+      setDisconnectTarget(null);
+      clearPolling(disconnectTarget.id);
+      setEvolutionState(disconnectTarget.id, {
+        phase: 'disconnected',
+        qrCode: '',
+        errorMessage: '',
+        connectedInfo: null,
+      });
+      fetchIntegrations();
+    } catch (err) {
+      console.error('Erro ao desconectar:', err);
+      showSnackbar('Erro ao desconectar WhatsApp', 'error');
+    } finally {
+      setDisconnecting(false);
     }
-    clearPolling(integrationId);
-    setEvolutionState(integrationId, {
-      phase: 'disconnected',
-      qrCode: '',
-      errorMessage: '',
-      connectedInfo: null,
-    });
-    fetchIntegrations();
+  };
+
+  const handleRefreshStatus = async (integration: Integration) => {
+    setRefreshingId(integration.id);
+    try {
+      const r = await api.get(`/integrations/${integration.id}/evolution_status/`);
+      const status = r.data.connection_status;
+      if (status === 'connected') {
+        showSnackbar('WhatsApp permanece conectado', 'success');
+      } else {
+        showSnackbar('WhatsApp está desconectado', 'info');
+        fetchIntegrations();
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
+      showSnackbar('Erro ao verificar status', 'error');
+    } finally {
+      setRefreshingId(null);
+    }
   };
 
   const handleRefreshQr = async (integrationId: string) => {
@@ -851,11 +870,13 @@ export default function IntegrationsPage() {
                 key={integration.id}
                 integration={integration}
                 onConnect={handleConnect}
-                onDisconnect={handleDisconnect}
+                onDisconnect={handleDisconnectClick}
+                onRefreshStatus={handleRefreshStatus}
                 onEdit={openEditDialog}
                 onDelete={setDeleteTarget}
                 onTest={handleTestConnection}
                 testingId={testingId}
+                refreshingId={refreshingId}
               />
             );
           })}
@@ -981,6 +1002,44 @@ export default function IntegrationsPage() {
           >
             {deleting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
             Excluir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!disconnectTarget}
+        onClose={() => !disconnecting && setDisconnectTarget(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>Desconectar WhatsApp</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Deseja realmente desconectar este WhatsApp?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Esta ação encerrará a sessão atual.
+          </Typography>
+          {disconnectTarget && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {disconnectTarget.name}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setDisconnectTarget(null)} disabled={disconnecting} sx={{ borderRadius: 2, textTransform: 'none' }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDisconnectConfirm}
+            disabled={disconnecting}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
+          >
+            {disconnecting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+            Desconectar
           </Button>
         </DialogActions>
       </Dialog>

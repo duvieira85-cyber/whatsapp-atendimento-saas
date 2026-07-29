@@ -94,7 +94,7 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         except EvolutionAPIError as e:
             return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
         channel = svc._get_or_create_channel()
-        result['connected_number'] = channel.phone_number or ''
+        result['connected_number'] = channel.phone_number or None
         result['last_sync_at'] = integration.last_sync_at.isoformat() if integration.last_sync_at else None
         return Response(result)
 
@@ -142,5 +142,5 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return Response({
             'connection_status': status_val,
             'last_sync_at': integration.last_sync_at.isoformat() if integration.last_sync_at else None,
-            'connected_number': channel.phone_number or '',
+            'connected_number': channel.phone_number or None,
         })

@@ -22,7 +22,7 @@ class IntegrationSerializer(serializers.ModelSerializer):
             provider=ChannelProvider.EVOLUTION,
             config__integration_id=str(obj.id),
         ).first()
-        return channel.phone_number if channel else ''
+        return channel.phone_number if channel and channel.phone_number else None
 
 
 class IntegrationCreateSerializer(serializers.ModelSerializer):
