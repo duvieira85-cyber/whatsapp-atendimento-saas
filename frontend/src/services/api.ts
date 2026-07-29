@@ -3,7 +3,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: API_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -33,7 +33,7 @@ api.interceptors.response.use(
 
       if (storedRefresh) {
         try {
-          const response = await axios.post(`${API_URL}/api/auth/refresh/`, {
+          const response = await axios.post(`${API_URL}/auth/refresh/`, {
             refresh: storedRefresh,
           });
           const { access } = response.data;
