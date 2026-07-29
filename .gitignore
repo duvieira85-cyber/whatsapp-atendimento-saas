@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# Django
+backend/staticfiles/
+backend/media/
+backend/*.sqlite3
+*.db
+
+# Node
+node_modules/
+frontend/dist/
+
+# Environment
+.env
+backend/.env
+frontend/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Build artifacts
+*.tsbuildinfo
+
+# Debug/utility scripts (not part of the app)
+backend/check_*.py
+backend/db_*.py
+backend/investigate*.py
+backend/test_*.py
+backend/delete_conv.py
+backend/list_convs.py

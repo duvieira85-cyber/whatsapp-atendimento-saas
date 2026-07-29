@@ -1,0 +1,157 @@
+volumes:
+  postgres_data:
+    name: whatsapp_postgres_data
+  redis_data:
+    name: whatsapp_redis_data
+  evolution_instances:
+    name: whatsapp_evolution_instances
+
+networks:
+  whatsapp_network:
+    name: whatsapp_network
+    driver: bridge
+
+services:
+  db:
+    image: postgres:16
+    container_name: whatsapp-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - whatsapp_network
+    environment:
+      POSTGRES_DB: ${DB_NAME:-whatsapp_service}
+      POSTGRES_USER: ${DB_USER:-whatsapp_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-whatsapp_pass}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - whatsapp_network
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    command: redis-server --appendonly yes
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    container_name: whatsapp-backend
+    restart: unless-stopped
+    volumes:
+      - ../backend:/app
+      - ../scripts:/scripts
+    networks:
+      - whatsapp_network
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - ../backend/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    container_name: whatsapp-frontend
+    restart: unless-stopped
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    networks:
+      - whatsapp_network
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      - backend
+    env_file:
+      - ../frontend/.env
+
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: whatsapp-evolution
+    restart: unless-stopped
+    networks:
+      - whatsapp_network
+    ports:
+      - "${EVOLUTION_PORT:-8081}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      SERVER_URL: "http://evolution:8080"
+      LOG_LEVEL: "DEBUG"
+      DEL_INSTANCE: "false"
+      DATABASE_PROVIDER: "postgresql"
+      DATABASE_CONNECTION_URI: "postgresql://${DB_USER:-whatsapp_user}:${DB_PASSWORD:-whatsapp_pass}@db:5432/evolution_db?connection_limit=50&pool_timeout=30"
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: "redis://redis:6379/1"
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY:-evolution-api-key-dev}"
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      QRCODE_LIMIT: "30"
+      WEBHOOK_GLOBAL_URL: "http://backend:8000/api/integrations/webhooks/evolution/"
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_APPLICATION_STARTUP: "false"
+      WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
+      WEBHOOK_EVENTS_MESSAGES_SET: "true"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_MESSAGES_EDITED: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "false"
+      WEBHOOK_EVENTS_MESSAGES_DELETE: "false"
+      WEBHOOK_EVENTS_SEND_MESSAGE: "false"
+      WEBHOOK_EVENTS_CONTACTS_SET: "false"
+      WEBHOOK_EVENTS_CONTACTS_UPSERT: "false"
+      WEBHOOK_EVENTS_PRESENCE_UPDATE: "false"
+      WEBHOOK_EVENTS_CHATS_SET: "false"
+      WEBHOOK_EVENTS_CHATS_UPSERT: "false"
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+      WEBHOOK_EVENTS_CALL: "false"
+      CONFIG_SESSION_PHONE_CLIENT: "Evolution API"
+      CONFIG_SESSION_PHONE_NAME: "Chrome"
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: whatsapp-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - whatsapp_network
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    depends_on:
+      - backend
+      - frontend
