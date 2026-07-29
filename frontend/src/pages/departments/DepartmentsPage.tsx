@@ -40,11 +40,10 @@ import type { Department } from '../../types';
 interface DepartmentForm {
   name: string;
   description: string;
-  color: string;
   order: number;
 }
 
-const emptyForm: DepartmentForm = { name: '', description: '', color: '#1976d2', order: 0 };
+const emptyForm: DepartmentForm = { name: '', description: '', order: 0 };
 
 export default function DepartmentsPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -105,7 +104,6 @@ export default function DepartmentsPage() {
     setForm({
       name: dept.name,
       description: dept.description || '',
-      color: dept.color || '#1976d2',
       order: dept.order ?? 0,
     });
     setDialogOpen(true);
@@ -256,7 +254,6 @@ export default function DepartmentsPage() {
                 </TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Descrição</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Cor</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Membros</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Ordem</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
@@ -271,16 +268,10 @@ export default function DepartmentsPage() {
                       <Checkbox checked={selected.has(dept.id)} onChange={() => handleSelectOne(dept.id)} />
                     </TableCell>
                     <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: dept.color || '#1976d2', flexShrink: 0 }} />
-                        <Typography fontWeight={500}>{dept.name}</Typography>
-                      </Box>
+                      <Typography fontWeight={500}>{dept.name}</Typography>
                     </TableCell>
                     <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {dept.description || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={dept.color || '#1976d2'} size="small" variant="outlined" sx={{ fontFamily: 'monospace' }} />
                     </TableCell>
                     <TableCell>
                       <Chip label={dept.member_count ?? 0} size="small" color="primary" variant="outlined" />
@@ -321,10 +312,7 @@ export default function DepartmentsPage() {
         <DialogContent>
           <TextField fullWidth size="small" label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} sx={{ mt: 1 }} required />
           <TextField fullWidth size="small" label="Descrição" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} sx={{ mt: 2 }} multiline rows={2} />
-          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-            <TextField fullWidth size="small" label="Cor" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#1976d2" />
-            <TextField fullWidth size="small" label="Ordem" type="number" value={form.order} onChange={(e) => setForm({ ...form, order: Number(e.target.value) })} />
-          </Box>
+          <TextField fullWidth size="small" label="Posição" type="number" value={form.order} onChange={(e) => setForm({ ...form, order: Number(e.target.value) })} sx={{ mt: 2 }} />
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button onClick={handleClose} sx={{ borderRadius: 2, textTransform: 'none' }}>Cancelar</Button>
