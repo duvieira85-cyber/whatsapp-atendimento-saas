@@ -22,4 +22,5 @@ class IntegrationSerializer(serializers.ModelSerializer):
 class IntegrationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Integration
-        fields = ['name']
+        fields = ['id', 'name']
+        read_only_fields = ['id']
