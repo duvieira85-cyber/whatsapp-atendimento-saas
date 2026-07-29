@@ -23,13 +23,13 @@ import {
   Fade,
   Grow,
   Zoom,
-  Slide,
+  Menu,
+  Snackbar,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
   Link as LinkIcon,
   LinkOff as LinkOffIcon,
-  QrCode as QrCodeIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   HourglassEmpty as HourglassIcon,
@@ -37,8 +37,11 @@ import {
   Language as LanguageIcon,
   AccessTime as AccessTimeIcon,
   Webhook as WebhookIcon,
-  Warning as WarningIcon,
   Add as AddIcon,
+  MoreVert as MoreVertIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import type { Integration } from '../../types';
@@ -99,7 +102,7 @@ const PHASE_COLORS: Record<ConnectionPhase, 'default' | 'info' | 'warning' | 'su
 };
 
 function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return '\u2014';
   try {
     const d = new Date(dateStr);
     return d.toLocaleString('pt-BR', {
@@ -114,16 +117,36 @@ function formatDate(dateStr: string | null | undefined): string {
   }
 }
 
+interface EvolutionCardProps {
+  integration: Integration;
+  onConnect: (id: string) => void;
+  onDisconnect: (id: string) => void;
+  onEdit: (integration: Integration) => void;
+  onDelete: (integration: Integration) => void;
+  onTest: (integration: Integration) => void;
+  testingId: string | null;
+}
+
 function EvolutionCard({
   integration,
   onConnect,
   onDisconnect,
-}: {
-  integration: Integration;
-  onConnect: (id: string) => void;
-  onDisconnect: (id: string) => void;
-}) {
+  onEdit,
+  onDelete,
+  onTest,
+  testingId,
+}: EvolutionCardProps) {
   const isActive = integration.status === 'active' || integration.status === 'connected';
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+
+  const handleAction = (cb: () => void) => {
+    handleMenuClose();
+    cb();
+  };
 
   return (
     <Grow in timeout={400}>
@@ -136,7 +159,7 @@ function EvolutionCard({
           '&:hover': {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06)',
           },
-          border: isActive ? '1px solid' : '1px solid',
+          border: '1px solid',
           borderColor: isActive ? 'success.light' : 'divider',
           overflow: 'visible',
         }}
@@ -186,6 +209,26 @@ function EvolutionCard({
                   sx={{ fontWeight: 500, borderRadius: 1.5 }}
                 />
               )}
+              <IconButton size="small" onClick={handleMenuOpen}>
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+              <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose} transformOrigin={{ horizontal: 'right', vertical: 'top' }} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}>
+                {!isActive && (
+                  <MenuItem onClick={() => handleAction(() => onConnect(integration.id))} dense>
+                    <LinkIcon sx={{ mr: 1.5, fontSize: 18 }} /> Conectar
+                  </MenuItem>
+                )}
+                <MenuItem onClick={() => handleAction(() => onTest(integration))} dense disabled={testingId === integration.id}>
+                  {testingId === integration.id ? <CircularProgress size={16} sx={{ mr: 1.5 }} /> : <PlayArrowIcon sx={{ mr: 1.5, fontSize: 18 }} />}
+                  Testar conexão
+                </MenuItem>
+                <MenuItem onClick={() => handleAction(() => onEdit(integration))} dense>
+                  <EditIcon sx={{ mr: 1.5, fontSize: 18 }} /> Editar
+                </MenuItem>
+                <MenuItem onClick={() => handleAction(() => onDelete(integration))} dense>
+                  <DeleteIcon sx={{ mr: 1.5, fontSize: 18 }} /> Excluir
+                </MenuItem>
+              </Menu>
             </Box>
           </Box>
 
@@ -205,13 +248,13 @@ function EvolutionCard({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                     <Typography variant="body2" color="text.secondary" noWrap>
-                      {(integration.config?.instance_name as string) || '—'}
+                      {(integration.config?.instance_name as string) || '\u2014'}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <LanguageIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                     <Typography variant="body2" color="text.secondary" noWrap>
-                      {String(integration.config?.evolution_url || '—')}
+                      {String(integration.config?.evolution_url || '\u2014')}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -231,35 +274,19 @@ function EvolutionCard({
             </Fade>
           )}
 
-          <Box sx={{ mt: 2.5, display: 'flex', gap: 1 }}>
-            {isActive ? (
-              <Button
-                variant="outlined"
-                color="error"
-                size="small"
-                startIcon={<LinkOffIcon />}
-                onClick={() => onDisconnect(integration.id)}
-                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 500 }}
-              >
-                Desconectar
-              </Button>
-            ) : (
+          {!isActive && (
+            <Box sx={{ mt: 2.5, display: 'flex', gap: 1 }}>
               <Button
                 variant="contained"
                 size="small"
                 startIcon={<LinkIcon />}
                 onClick={() => onConnect(integration.id)}
-                sx={{
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 2.5,
-                }}
+                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, px: 2.5 }}
               >
                 Conectar
               </Button>
-            )}
-          </Box>
+            </Box>
+          )}
         </CardContent>
       </Card>
     </Grow>
@@ -443,7 +470,26 @@ function ConnectingCard({
   );
 }
 
-function OtherIntegrationCard({ integration }: { integration: Integration }) {
+interface OtherIntegrationCardProps {
+  integration: Integration;
+  onEdit: (integration: Integration) => void;
+  onDelete: (integration: Integration) => void;
+  onTest: (integration: Integration) => void;
+  testingId: string | null;
+}
+
+function OtherIntegrationCard({ integration, onEdit, onDelete, onTest, testingId }: OtherIntegrationCardProps) {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+
+  const handleAction = (cb: () => void) => {
+    handleMenuClose();
+    cb();
+  };
+
   return (
     <Card
       sx={{
@@ -464,29 +510,59 @@ function OtherIntegrationCard({ integration }: { integration: Integration }) {
               {providerLabels[integration.provider] || integration.provider}
             </Typography>
           </Box>
-          <Chip
-            label={
-              integration.status === 'active'
-                ? 'Ativo'
-                : integration.status === 'error'
-                  ? 'Erro'
-                  : 'Inativo'
-            }
-            color={
-              integration.status === 'active'
-                ? 'success'
-                : integration.status === 'error'
-                  ? 'error'
-                  : 'default'
-            }
-            size="small"
-            sx={{ fontWeight: 500, borderRadius: 1.5 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Chip
+              label={
+                integration.status === 'active'
+                  ? 'Ativo'
+                  : integration.status === 'error'
+                    ? 'Erro'
+                    : 'Inativo'
+              }
+              color={
+                integration.status === 'active'
+                  ? 'success'
+                  : integration.status === 'error'
+                    ? 'error'
+                    : 'default'
+              }
+              size="small"
+              sx={{ fontWeight: 500, borderRadius: 1.5 }}
+            />
+            <IconButton size="small" onClick={handleMenuOpen}>
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+            <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose} transformOrigin={{ horizontal: 'right', vertical: 'top' }} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}>
+              <MenuItem onClick={() => handleAction(() => onTest(integration))} dense disabled={testingId === integration.id}>
+                {testingId === integration.id ? <CircularProgress size={16} sx={{ mr: 1.5 }} /> : <PlayArrowIcon sx={{ mr: 1.5, fontSize: 18 }} />}
+                Testar conexão
+              </MenuItem>
+              <MenuItem onClick={() => handleAction(() => onEdit(integration))} dense>
+                <EditIcon sx={{ mr: 1.5, fontSize: 18 }} /> Editar
+              </MenuItem>
+              <MenuItem onClick={() => handleAction(() => onDelete(integration))} dense>
+                <DeleteIcon sx={{ mr: 1.5, fontSize: 18 }} /> Excluir
+              </MenuItem>
+            </Menu>
+          </Box>
         </Box>
       </CardContent>
     </Card>
   );
 }
+
+type SnackbarState = {
+  open: boolean;
+  message: string;
+  severity: 'success' | 'error' | 'info';
+};
+
+const defaultFormData = {
+  provider: 'evolution' as const,
+  name: '',
+  evolution_url: '',
+  api_key: '',
+};
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -494,13 +570,18 @@ export default function IntegrationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [evolutionStates, setEvolutionStates] = useState<Record<string, EvolutionState>>({});
   const pollIntervals = useRef<Record<string, ReturnType<typeof setInterval>>>({});
-  const [formData, setFormData] = useState({
-    provider: 'evolution',
-    name: '',
-    evolution_url: '',
-    api_key: '',
-  });
-  const [createError, setCreateError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ ...defaultFormData });
+  const [dialogError, setDialogError] = useState('');
+  const [dialogSaving, setDialogSaving] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
+
+  const showSnackbar = (message: string, severity: 'success' | 'error' | 'info') => {
+    setSnackbar({ open: true, message, severity });
+  };
 
   const clearPolling = useCallback((id: string) => {
     if (pollIntervals.current[id]) {
@@ -567,28 +648,95 @@ export default function IntegrationsPage() {
     [clearPolling, setEvolutionState, fetchIntegrations],
   );
 
-  const handleCreate = async () => {
-    setCreateError('');
+  const openCreateDialog = () => {
+    setEditingId(null);
+    setFormData({ ...defaultFormData });
+    setDialogError('');
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (integration: Integration) => {
+    setEditingId(integration.id);
+    setFormData({
+      provider: integration.provider as 'evolution',
+      name: integration.name,
+      evolution_url: (integration.config?.evolution_url as string) || '',
+      api_key: (integration.config?.api_key as string) || '',
+    });
+    setDialogError('');
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    setDialogError('');
+    setDialogSaving(true);
     try {
-      await api.post('/integrations/', {
-        provider: formData.provider,
-        name: formData.name,
-        config: {
-          evolution_url: formData.evolution_url,
-          api_key: formData.api_key,
-        },
-      });
+      if (editingId) {
+        await api.patch(`/integrations/${editingId}/`, {
+          provider: formData.provider,
+          name: formData.name,
+          config: {
+            evolution_url: formData.evolution_url,
+            api_key: formData.api_key,
+          },
+        });
+        showSnackbar('Integração atualizada com sucesso', 'success');
+      } else {
+        await api.post('/integrations/', {
+          provider: formData.provider,
+          name: formData.name,
+          config: {
+            evolution_url: formData.evolution_url,
+            api_key: formData.api_key,
+          },
+        });
+        showSnackbar('Integração criada com sucesso', 'success');
+      }
       setDialogOpen(false);
-      setCreateError('');
-      setFormData({ provider: 'evolution', name: '', evolution_url: '', api_key: '' });
+      setFormData({ ...defaultFormData });
       fetchIntegrations();
     } catch (err) {
-      console.error('Erro ao criar integração:', err);
+      console.error('Erro ao salvar integração:', err);
       const msg =
         err && typeof err === 'object' && 'response' in err
           ? String((err as { response: { data?: { error?: string } } }).response?.data?.error || 'Erro ao salvar integração')
           : 'Erro ao salvar integração';
-      setCreateError(msg);
+      setDialogError(msg);
+    } finally {
+      setDialogSaving(false);
+    }
+  };
+
+  const handleTestConnection = async (integration: Integration) => {
+    setTestingId(integration.id);
+    try {
+      const r = await api.post(`/integrations/${integration.id}/test/`);
+      showSnackbar(r.data.message || 'Conexão testada com sucesso', 'success');
+    } catch (err) {
+      console.error('Erro ao testar conexão:', err);
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? String((err as { response: { data?: { error?: string } } }).response?.data?.error || 'Erro ao testar conexão')
+          : 'Erro ao testar conexão';
+      showSnackbar(msg, 'error');
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/integrations/${deleteTarget.id}/`);
+      showSnackbar('Integração excluída com sucesso', 'success');
+      setDeleteTarget(null);
+      fetchIntegrations();
+    } catch (err) {
+      console.error('Erro ao excluir integração:', err);
+      showSnackbar('Erro ao excluir integração', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -723,10 +871,6 @@ export default function IntegrationsPage() {
   const evolutionIntegrations = integrations.filter((i) => i.provider === 'evolution');
   const otherIntegrations = integrations.filter((i) => i.provider !== 'evolution');
 
-  const isAnyConnecting = Object.values(evolutionStates).some(
-    (s) => s.phase === 'generating' || s.phase === 'awaiting_scan',
-  );
-
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -741,7 +885,7 @@ export default function IntegrationsPage() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => { setCreateError(''); setDialogOpen(true); }}
+          onClick={openCreateDialog}
           sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, px: 2.5 }}
         >
           Nova Integração
@@ -783,6 +927,10 @@ export default function IntegrationsPage() {
                 integration={integration}
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
+                onEdit={openEditDialog}
+                onDelete={setDeleteTarget}
+                onTest={handleTestConnection}
+                testingId={testingId}
               />
             );
           })}
@@ -795,7 +943,14 @@ export default function IntegrationsPage() {
             Outras Integrações
           </Typography>
           {otherIntegrations.map((integration) => (
-            <OtherIntegrationCard key={integration.id} integration={integration} />
+            <OtherIntegrationCard
+              key={integration.id}
+              integration={integration}
+              onEdit={openEditDialog}
+              onDelete={setDeleteTarget}
+              onTest={handleTestConnection}
+              testingId={testingId}
+            />
           ))}
         </Box>
       )}
@@ -821,7 +976,7 @@ export default function IntegrationsPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => { setCreateError(''); setDialogOpen(true); }}
+            onClick={openCreateDialog}
             sx={{ borderRadius: 2, textTransform: 'none' }}
           >
             Nova Integração
@@ -831,18 +986,18 @@ export default function IntegrationsPage() {
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => !dialogSaving && setDialogOpen(false)}
         maxWidth="sm"
         fullWidth
         PaperProps={{
           sx: { borderRadius: 3 },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 600 }}>Nova Integração</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 600 }}>{editingId ? 'Editar Integração' : 'Nova Integração'}</DialogTitle>
         <DialogContent>
-          {createError && (
+          {dialogError && (
             <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-              {createError}
+              {dialogError}
             </Alert>
           )}
           <FormControl fullWidth size="small" sx={{ mt: 1 }}>
@@ -850,7 +1005,8 @@ export default function IntegrationsPage() {
             <Select
               value={formData.provider}
               label="Provedor"
-              onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, provider: e.target.value as 'evolution' })}
+              disabled={dialogSaving}
             >
               <MenuItem value="evolution">Evolution API</MenuItem>
               <MenuItem value="meta_cloud">Meta Cloud API</MenuItem>
@@ -865,6 +1021,7 @@ export default function IntegrationsPage() {
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             sx={{ mt: 2 }}
+            disabled={dialogSaving}
           />
           {formData.provider === 'evolution' && (
             <>
@@ -876,6 +1033,7 @@ export default function IntegrationsPage() {
                 value={formData.evolution_url}
                 onChange={(e) => setFormData({ ...formData, evolution_url: e.target.value })}
                 sx={{ mt: 2 }}
+                disabled={dialogSaving}
               />
               <TextField
                 fullWidth
@@ -885,24 +1043,77 @@ export default function IntegrationsPage() {
                 value={formData.api_key}
                 onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
                 sx={{ mt: 2 }}
+                disabled={dialogSaving}
               />
             </>
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setDialogOpen(false)} sx={{ borderRadius: 2, textTransform: 'none' }}>
+          <Button onClick={() => setDialogOpen(false)} disabled={dialogSaving} sx={{ borderRadius: 2, textTransform: 'none' }}>
             Cancelar
           </Button>
           <Button
             variant="contained"
-            onClick={handleCreate}
-            disabled={!formData.name}
+            onClick={handleSave}
+            disabled={!formData.name || dialogSaving}
             sx={{ borderRadius: 2, textTransform: 'none' }}
           >
-            Salvar
+            {dialogSaving ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+            {editingId ? 'Atualizar' : 'Salvar'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>Excluir Integração</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Deseja realmente excluir esta integração?
+          </Typography>
+          {deleteTarget && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {deleteTarget.name} ({providerLabels[deleteTarget.provider] || deleteTarget.provider})
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setDeleteTarget(null)} disabled={deleting} sx={{ borderRadius: 2, textTransform: 'none' }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deleting}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
+          >
+            {deleting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+            Excluir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          severity={snackbar.severity}
+          sx={{ borderRadius: 2 }}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

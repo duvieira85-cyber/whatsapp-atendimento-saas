@@ -36,10 +36,40 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def test(self, request, pk=None):
         integration = self.get_object()
-        return Response({
-            'status': 'ok',
-            'message': f'Conexão com {integration.get_provider_display()} testada com sucesso',
-        })
+        if integration.provider != 'evolution':
+            return Response({
+                'status': 'ok',
+                'message': f'Configuração de {integration.get_provider_display()} salva corretamente',
+            })
+
+        evo_url = integration.config.get('evolution_url', '')
+        api_key = integration.config.get('api_key', '')
+
+        if not evo_url or not api_key:
+            return Response(
+                {'error': 'URL da Evolution API e API Key são obrigatórios para testar a conexão'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .services.evolution_client import EvolutionAPIClient
+        client = EvolutionAPIClient(
+            base_url=evo_url,
+            api_key=api_key,
+            instance_name='test-connection',
+            timeout=10,
+        )
+        try:
+            data = client.connection_state()
+            return Response({
+                'status': 'ok',
+                'message': 'Conexão com Evolution API estabelecida com sucesso',
+                'details': data,
+            })
+        except EvolutionAPIError as e:
+            return Response(
+                {'error': f'Erro de conexão com Evolution API: {str(e)}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
     @action(detail=True, methods=['post'])
     def evolution_connect(self, request, pk=None):
