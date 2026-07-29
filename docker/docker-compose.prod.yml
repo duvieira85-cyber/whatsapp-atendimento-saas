@@ -78,7 +78,9 @@ services:
       - backend_media:/app/media
       - logs:/app/logs
     networks:
-      - whatsapp_network
+      - name: whatsapp_network
+        aliases:
+          - backend-service
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -110,7 +112,9 @@ services:
     container_name: whatsapp-frontend-prod
     restart: unless-stopped
     networks:
-      - whatsapp_network
+      - name: whatsapp_network
+        aliases:
+          - frontend-service
     depends_on:
       - backend
     logging:
