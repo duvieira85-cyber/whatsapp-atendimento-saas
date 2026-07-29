@@ -18,5 +18,3 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at']
     ordering = ['-created_at']
 
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)

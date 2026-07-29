@@ -24,12 +24,6 @@ class DepartmentViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             return [IsAuthenticated(), IsAttendant()]
         return [IsAuthenticated(), CanManageCompany()]
 
-    def perform_create(self, serializer):
-        company = self.request.user.company
-        if not company:
-            from apps.companies.models import Company
-            company = Company.objects.first()
-        serializer.save(company=company)
 
 
 class DepartmentMemberViewSet(TenantFilterMixin, viewsets.ModelViewSet):

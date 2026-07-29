@@ -24,10 +24,6 @@ class BotConfigViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             return qs.filter(company=user.company)
         return qs.none()
 
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
-
 class BotMenuOptionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = BotMenuOption.objects.all()
     serializer_class = BotMenuOptionSerializer

@@ -12,9 +12,9 @@ class TimeStampedModel(models.Model):
         abstract = True
 
     def save(self, *args, **kwargs):
-        from .middleware import get_current_company
+        from .middleware import get_resolved_company
         if hasattr(self, 'company_id') and not self.company_id:
-            company = get_current_company()
+            company = get_resolved_company()
             if company:
                 self.company = company
         super().save(*args, **kwargs)
@@ -54,9 +54,9 @@ class TenantModel(models.Model):
         abstract = True
 
     def save(self, *args, **kwargs):
-        from .middleware import get_current_company
+        from .middleware import get_resolved_company
         if not self.company_id:
-            company = get_current_company()
+            company = get_resolved_company()
             if company:
                 self.company = company
         super().save(*args, **kwargs)

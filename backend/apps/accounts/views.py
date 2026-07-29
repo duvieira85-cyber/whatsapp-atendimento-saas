@@ -107,8 +107,3 @@ class UserViewSet(viewsets.ModelViewSet):
             return qs.filter(company=user.company)
         return qs.none()
 
-    def perform_create(self, serializer):
-        if not self.request.user.role == 'super_admin':
-            serializer.save(company=self.request.user.company)
-        else:
-            serializer.save()

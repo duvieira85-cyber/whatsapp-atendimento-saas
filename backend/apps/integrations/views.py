@@ -24,9 +24,6 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             return IntegrationCreateSerializer
         return IntegrationSerializer
 
-    def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
-
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user

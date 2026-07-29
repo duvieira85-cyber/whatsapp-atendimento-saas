@@ -500,6 +500,7 @@ export default function IntegrationsPage() {
     evolution_url: '',
     api_key: '',
   });
+  const [createError, setCreateError] = useState('');
 
   const clearPolling = useCallback((id: string) => {
     if (pollIntervals.current[id]) {
@@ -567,17 +568,28 @@ export default function IntegrationsPage() {
   );
 
   const handleCreate = async () => {
-    await api.post('/integrations/', {
-      provider: formData.provider,
-      name: formData.name,
-      config: {
-        evolution_url: formData.evolution_url,
-        api_key: formData.api_key,
-      },
-    });
-    setDialogOpen(false);
-    setFormData({ provider: 'evolution', name: '', evolution_url: '', api_key: '' });
-    fetchIntegrations();
+    setCreateError('');
+    try {
+      await api.post('/integrations/', {
+        provider: formData.provider,
+        name: formData.name,
+        config: {
+          evolution_url: formData.evolution_url,
+          api_key: formData.api_key,
+        },
+      });
+      setDialogOpen(false);
+      setCreateError('');
+      setFormData({ provider: 'evolution', name: '', evolution_url: '', api_key: '' });
+      fetchIntegrations();
+    } catch (err) {
+      console.error('Erro ao criar integração:', err);
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? String((err as { response: { data?: { error?: string } } }).response?.data?.error || 'Erro ao salvar integração')
+          : 'Erro ao salvar integração';
+      setCreateError(msg);
+    }
   };
 
   const handleConnect = async (integrationId: string) => {
@@ -729,7 +741,7 @@ export default function IntegrationsPage() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setDialogOpen(true)}
+          onClick={() => { setCreateError(''); setDialogOpen(true); }}
           sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, px: 2.5 }}
         >
           Nova Integração
@@ -809,7 +821,7 @@ export default function IntegrationsPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setDialogOpen(true)}
+            onClick={() => { setCreateError(''); setDialogOpen(true); }}
             sx={{ borderRadius: 2, textTransform: 'none' }}
           >
             Nova Integração
@@ -828,6 +840,11 @@ export default function IntegrationsPage() {
       >
         <DialogTitle sx={{ fontWeight: 600 }}>Nova Integração</DialogTitle>
         <DialogContent>
+          {createError && (
+            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+              {createError}
+            </Alert>
+          )}
           <FormControl fullWidth size="small" sx={{ mt: 1 }}>
             <InputLabel>Provedor</InputLabel>
             <Select

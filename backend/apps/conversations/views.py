@@ -260,10 +260,6 @@ class QuickResponseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             return QuickResponseCreateSerializer
         return QuickResponseSerializer
 
-    def perform_create(self, serializer):
-        from apps.core.middleware import get_current_company
-        serializer.save(company=get_current_company())
-
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
