@@ -30,3 +30,18 @@ export async function updateUser(id: number, data: Partial<User>): Promise<User>
   const response = await api.patch<User>(`/auth/users/${id}/`, data);
   return response.data;
 }
+
+export async function changePassword(data: {
+  old_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<void> {
+  await api.post('/auth/change-password/', data);
+}
+
+export async function adminResetPassword(userId: string | number, data: {
+  new_password: string;
+  confirm_password: string;
+}): Promise<void> {
+  await api.post(`/auth/users/${userId}/admin_reset_password/`, data);
+}

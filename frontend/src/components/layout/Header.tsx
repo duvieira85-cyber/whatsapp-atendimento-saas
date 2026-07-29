@@ -27,7 +27,7 @@ interface Props {
 }
 
 const roleLabels: Record<string, string> = {
-  super_admin: 'Super Admin',
+  super_admin: 'Administrador',
   admin: 'Administrador',
   supervisor: 'Supervisor',
   attendant: 'Atendente',

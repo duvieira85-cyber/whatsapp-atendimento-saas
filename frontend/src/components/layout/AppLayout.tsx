@@ -45,7 +45,7 @@ export default function AppLayout() {
           showMenuButton={!isPermanent}
           onMenuToggle={handleMenuToggle}
         />
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 0, overflow: 'hidden', minHeight: 0 }}>
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: { xs: 2, md: 3 }, overflow: 'auto', minHeight: 0 }}>
           <Outlet />
         </Box>
       </Box>

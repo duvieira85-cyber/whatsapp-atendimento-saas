@@ -41,8 +41,18 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'first_name', 'last_name', 'role', 'phone', 'is_active',
+            'first_name', 'last_name', 'username', 'role', 'phone', 'is_active',
         ]
+        extra_kwargs = {
+            'username': {'required': False},
+        }
+
+    def validate_username(self, value):
+        if self.instance and value == self.instance.username:
+            return value
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('Este nome de usuário já está em uso.')
+        return value
 
 
 class LoginSerializer(serializers.Serializer):
@@ -50,7 +60,28 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField()
 
 
+class AdminResetPasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(required=True, min_length=6)
+    confirm_password = serializers.CharField(required=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'As senhas não coincidem.'})
+        return data
+
+
 class TokenResponseSerializer(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()
     user = UserSerializer()
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=6)
+    confirm_password = serializers.CharField(required=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'As senhas não coincidem.'})
+        return data

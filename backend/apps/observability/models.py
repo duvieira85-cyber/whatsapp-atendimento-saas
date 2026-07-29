@@ -12,6 +12,7 @@ class AuditLog(models.Model):
         TRANSFER = 'transfer', 'Transferência'
         ASSIGN = 'assign', 'Atribuição'
         CLOSE = 'close', 'Fechamento'
+        PASSWORD_RESET = 'password_reset', 'Redefinição de Senha'
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

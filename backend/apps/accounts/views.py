@@ -2,15 +2,17 @@ from rest_framework import status, viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import User
 from .serializers import (
     UserSerializer, UserCreateSerializer, UserUpdateSerializer,
-    LoginSerializer,
+    LoginSerializer, ChangePasswordSerializer, AdminResetPasswordSerializer,
 )
 from apps.core.permissions import CanManageUsers
+from apps.observability.services import log_audit
 
 
 class AuthViewSet(viewsets.ViewSet):
@@ -77,6 +79,23 @@ class AuthViewSet(viewsets.ViewSet):
             )
         return Response(UserSerializer(request.user).data)
 
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def change_password(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        if not user.check_password(serializer.validated_data['old_password']):
+            return Response(
+                {'old_password': 'Senha atual incorreta.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
+
+        return Response({'detail': 'Senha alterada com sucesso.'})
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('company').all()
@@ -110,6 +129,50 @@ class UserViewSet(viewsets.ModelViewSet):
         if instance.role == 'attendant' and not hasattr(instance, 'attendant_profile'):
             from .models import Attendant
             Attendant.objects.create(user=instance)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        data = serializer.validated_data
+
+        if instance.role == 'super_admin':
+            new_role = data.get('role', instance.role)
+            new_is_active = data.get('is_active', instance.is_active)
+            if new_role != 'super_admin' or not new_is_active:
+                last_count = User.objects.filter(role='super_admin', is_active=True).exclude(id=instance.id).count()
+                if last_count == 0:
+                    raise PermissionDenied('Não é possível remover o último Super Administrador.')
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance == self.request.user:
+            raise PermissionDenied('Você não pode excluir a própria conta.')
+        if instance.role == 'super_admin':
+            last_count = User.objects.filter(role='super_admin', is_active=True).exclude(id=instance.id).count()
+            if last_count == 0:
+                raise PermissionDenied('Não é possível excluir o último Super Administrador.')
+        instance.delete()
+
+    @action(detail=True, methods=['post'], permission_classes=[CanManageUsers])
+    def admin_reset_password(self, request, pk=None):
+        target = self.get_object()
+        serializer = AdminResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        target.set_password(serializer.validated_data['new_password'])
+        target.save(update_fields=['password'])
+
+        log_audit(
+            user=request.user,
+            action='password_reset',
+            resource_type='user',
+            resource_id=str(target.id),
+            details={'reset_user': target.get_full_name() or target.username, 'reset_user_id': str(target.id)},
+            ip_address=request.META.get('REMOTE_ADDR'),
+            company=request.user.company if request.user.role != 'super_admin' else None,
+        )
+
+        return Response({'detail': 'Senha redefinida com sucesso.'})
 
     def get_queryset(self):
         qs = super().get_queryset()

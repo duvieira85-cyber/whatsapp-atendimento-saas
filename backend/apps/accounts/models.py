@@ -49,6 +49,11 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if self.role == UserRole.SUPER_ADMIN:
             self.company = None
+        elif not self.company_id:
+            from apps.core.middleware import get_resolved_company
+            company = get_resolved_company()
+            if company:
+                self.company = company
         super().save(*args, **kwargs)
 
 

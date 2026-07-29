@@ -208,21 +208,41 @@ export default function DepartmentsPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>Departamentos</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Gerencie os setores de atendimento
-          </Typography>
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Box>
+            <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+              Departamentos
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+              Gerencie os setores de atendimento da sua empresa.
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreate}
+            size="large"
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 3,
+              py: 1.2,
+              boxShadow: '0 4px 14px rgba(130, 10, 209, 0.35)',
+              '&:hover': {
+                boxShadow: '0 6px 24px rgba(130, 10, 209, 0.45)',
+              },
+            }}
+          >
+            Novo Departamento
+          </Button>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>
-          Novo Departamento
-        </Button>
       </Box>
 
       {selected.size > 0 && (
         <Slide direction="down" in mountOnEnter unmountOnExit>
-          <Paper sx={{ mb: 2, p: 1.5, display: 'flex', alignItems: 'center', gap: 1.5, borderRadius: 2, bgcolor: 'grey.50' }}>
+          <Paper sx={{ mb: 3, p: 2, display: 'flex', alignItems: 'center', gap: 2, borderRadius: 2, bgcolor: 'grey.50', border: '1px solid', borderColor: 'divider' }}>
             <Typography variant="body2" fontWeight={600} sx={{ minWidth: 120 }}>
               {selected.size} selecionado(s)
             </Typography>
@@ -245,66 +265,91 @@ export default function DepartmentsPage() {
           </Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell padding="checkbox">
-                  <Checkbox checked={allSelected} indeterminate={selected.size > 0 && !allSelected} onChange={handleSelectAll} />
-                </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Descrição</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Membros</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Ordem</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 600 }} align="right">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {departments.map((dept) => (
-                <Grow key={dept.id} in timeout={200}>
-                  <TableRow hover selected={selected.has(dept.id)} sx={{ '&:last-child td': { border: 0 } }}>
-                    <TableCell padding="checkbox">
-                      <Checkbox checked={selected.has(dept.id)} onChange={() => handleSelectOne(dept.id)} />
-                    </TableCell>
-                    <TableCell>
-                      <Typography fontWeight={500}>{dept.name}</Typography>
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {dept.description || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={dept.member_count ?? 0} size="small" color="primary" variant="outlined" />
-                    </TableCell>
-                    <TableCell>{dept.order}</TableCell>
-                    <TableCell>
-                      <Chip label={dept.is_active ? 'Ativo' : 'Inativo'} color={dept.is_active ? 'success' : 'default'} size="small" sx={{ fontWeight: 500, borderRadius: 1.5 }} />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                        <Tooltip title={dept.is_active ? 'Desativar' : 'Ativar'}>
-                          <IconButton size="small" onClick={() => handleToggleActive(dept)}>
-                            {dept.is_active ? <ToggleOffIcon fontSize="small" /> : <ToggleOnIcon fontSize="small" />}
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Editar">
-                          <IconButton size="small" onClick={() => handleOpenEdit(dept)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Excluir">
-                          <IconButton size="small" color="error" onClick={() => handleDelete(dept)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                </Grow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: '1px solid',
+            borderColor: 'divider',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
+          }}
+        >
+          <TableContainer component={Paper} elevation={0} sx={{ boxShadow: 'none', borderRadius: 0 }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox checked={allSelected} indeterminate={selected.size > 0 && !allSelected} onChange={handleSelectAll} />
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Descrição</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Membros</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Ordem</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="right">Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {departments.map((dept) => (
+                  <Grow key={dept.id} in timeout={200}>
+                    <TableRow
+                      hover
+                      selected={selected.has(dept.id)}
+                      sx={{
+                        '&:last-child td': { border: 0 },
+                        '& td': { py: 1.5 },
+                        '&:hover': { bgcolor: 'rgba(130, 10, 209, 0.03)' },
+                        '&.Mui-selected': {
+                          bgcolor: 'rgba(130, 10, 209, 0.06)',
+                          '&:hover': { bgcolor: 'rgba(130, 10, 209, 0.09)' },
+                        },
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox checked={selected.has(dept.id)} onChange={() => handleSelectOne(dept.id)} />
+                      </TableCell>
+                      <TableCell>
+                        <Typography fontWeight={500}>{dept.name}</Typography>
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {dept.description || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={dept.member_count ?? 0} size="small" color="primary" variant="outlined" sx={{ fontWeight: 500, borderRadius: 1.5 }} />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{dept.order}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={dept.is_active ? 'Ativo' : 'Inativo'} color={dept.is_active ? 'success' : 'default'} size="small" sx={{ fontWeight: 500, borderRadius: 1.5 }} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                          <Tooltip title={dept.is_active ? 'Desativar' : 'Ativar'}>
+                            <IconButton size="small" onClick={() => handleToggleActive(dept)}>
+                              {dept.is_active ? <ToggleOffIcon fontSize="small" /> : <ToggleOnIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Editar">
+                            <IconButton size="small" onClick={() => handleOpenEdit(dept)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Excluir">
+                            <IconButton size="small" color="error" onClick={() => handleDelete(dept)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  </Grow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
 
       <Dialog open={dialogOpen} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>

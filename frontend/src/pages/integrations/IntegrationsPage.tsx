@@ -8,481 +8,34 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   CircularProgress,
-  Chip,
-  Alert,
-  Card,
-  CardContent,
-  IconButton,
-  Tooltip,
-  Fade,
-  Grow,
-  Zoom,
-  Menu,
-  MenuItem,
   Snackbar,
+  Alert,
+  Fade,
 } from '@mui/material';
 import {
-  Refresh as RefreshIcon,
   Link as LinkIcon,
-  Error as ErrorIcon,
-  Add as AddIcon,
-  MoreVert as MoreVertIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  PlayArrow as PlayArrowIcon,
   LinkOff as LinkOffIcon,
+  Refresh as RefreshIcon,
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import api from '../../services/api';
 import type { Integration } from '../../types';
 
-const providerIcons: Record<string, string> = {
-  evolution: '\u{1F9EC}',
-  meta_cloud: '\u{1F4AC}',
-  twilio: '\u{1F4DE}',
-  gupshup: '\u{1F4E8}',
-};
-
-const providerLabels: Record<string, string> = {
-  evolution: 'Evolution API',
-  meta_cloud: 'Meta Cloud API',
-  twilio: 'Twilio',
-  gupshup: 'Gupshup',
-};
-
-type ConnectionPhase =
-  | 'never_connected'
-  | 'generating'
-  | 'awaiting_scan'
-  | 'connected'
-  | 'disconnected'
-  | 'error';
-
-interface EvolutionState {
-  phase: ConnectionPhase;
-  qrCode: string;
-  errorMessage: string;
-  connectedInfo: ConnectedInfo | null;
-}
-
-interface ConnectedInfo {
-  instanceName: string;
-  channelId: string;
-  connectedAt: string;
-  webhookUrl: string;
-  phoneNumber?: string;
-}
-
-const PHASE_LABELS: Record<ConnectionPhase, string> = {
-  never_connected: 'Nunca conectado',
-  generating: 'Gerando QR Code',
-  awaiting_scan: 'Aguardando leitura',
-  connected: 'Conectado',
-  disconnected: 'Desconectado',
-  error: 'Erro',
-};
-
-const PHASE_COLORS: Record<ConnectionPhase, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
-  never_connected: 'default',
-  generating: 'info',
-  awaiting_scan: 'warning',
-  connected: 'success',
-  disconnected: 'default',
-  error: 'error',
-};
-
-interface EvolutionCardProps {
-  integration: Integration;
-  onConnect: (id: string) => void;
-  onDisconnect: (integration: Integration) => void;
-  onRefreshStatus: (integration: Integration) => void;
-  onEdit: (integration: Integration) => void;
-  onDelete: (integration: Integration) => void;
-  onTest: (integration: Integration) => void;
-  testingId: string | null;
-  refreshingId: string | null;
-}
-
-function formatPhone(phone: string): string {
+function formatBrazilianPhone(phone: string): string {
+  if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
-  if (digits.length === 13) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
-  if (digits.length === 12) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  const local = digits.startsWith('55') ? digits.slice(2) : digits;
+  if (local.length === 11) {
+    return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  }
+  if (local.length === 10) {
+    return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  }
   return phone;
 }
 
-function EvolutionCard({
-  integration,
-  onConnect,
-  onDisconnect,
-  onRefreshStatus,
-  onEdit,
-  onDelete,
-  onTest,
-  testingId,
-  refreshingId,
-}: EvolutionCardProps) {
-  const isActive = integration.status === 'active' || integration.status === 'connected';
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
-
-  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget);
-  const handleMenuClose = () => setAnchorEl(null);
-
-  const handleAction = (cb: () => void) => {
-    handleMenuClose();
-    cb();
-  };
-
-  return (
-    <Grow in timeout={400}>
-      <Card
-        sx={{
-          mb: 2,
-          borderRadius: 3,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
-          transition: 'box-shadow 0.2s ease, transform 0.2s ease',
-          '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06)',
-          },
-          border: '1px solid',
-          borderColor: isActive ? 'success.light' : 'divider',
-          overflow: 'visible',
-        }}
-      >
-        <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
-              <Box
-                sx={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 2,
-                  bgcolor: isActive ? 'success.light' : 'grey.100',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 22,
-                  flexShrink: 0,
-                }}
-              >
-                {'\u{1F4F1}'}
-              </Box>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="subtitle1" fontWeight={600} noWrap>
-                  {integration.name}
-                </Typography>
-                {integration.connected_number ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-                    {formatPhone(integration.connected_number)}
-                  </Typography>
-                ) : (
-                  <Typography variant="caption" color="text.secondary">
-                    Nenhum n\u00FAmero conectado
-                  </Typography>
-                )}
-              </Box>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-              <Typography variant="body2" fontWeight={500} color={isActive ? 'success.main' : 'text.secondary'}>
-                {isActive ? '\u{1F7E2} Conectado' : '\u{1F534} Desconectado'}
-              </Typography>
-              <IconButton size="small" onClick={handleMenuOpen}>
-                <MoreVertIcon fontSize="small" />
-              </IconButton>
-              <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose} transformOrigin={{ horizontal: 'right', vertical: 'top' }} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}>
-                {isActive ? (
-                  <MenuItem onClick={() => handleAction(() => onDisconnect(integration))} dense>
-                    <LinkOffIcon sx={{ mr: 1.5, fontSize: 18 }} /> Desconectar WhatsApp
-                  </MenuItem>
-                ) : (
-                  <MenuItem onClick={() => handleAction(() => onConnect(integration.id))} dense>
-                    <LinkIcon sx={{ mr: 1.5, fontSize: 18 }} /> Conectar WhatsApp
-                  </MenuItem>
-                )}
-                {isActive && (
-                  <MenuItem onClick={() => handleAction(() => onRefreshStatus(integration))} dense disabled={refreshingId === integration.id}>
-                    {refreshingId === integration.id ? <CircularProgress size={16} sx={{ mr: 1.5 }} /> : <CheckCircleIcon sx={{ mr: 1.5, fontSize: 18 }} />}
-                    Atualizar Status
-                  </MenuItem>
-                )}
-                <MenuItem onClick={() => handleAction(() => onTest(integration))} dense disabled={testingId === integration.id}>
-                  {testingId === integration.id ? <CircularProgress size={16} sx={{ mr: 1.5 }} /> : <PlayArrowIcon sx={{ mr: 1.5, fontSize: 18 }} />}
-                  Testar conexão
-                </MenuItem>
-                <MenuItem onClick={() => handleAction(() => onEdit(integration))} dense>
-                  <EditIcon sx={{ mr: 1.5, fontSize: 18 }} /> Editar
-                </MenuItem>
-                <MenuItem onClick={() => handleAction(() => onDelete(integration))} dense>
-                  <DeleteIcon sx={{ mr: 1.5, fontSize: 18 }} /> Excluir
-                </MenuItem>
-              </Menu>
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
-    </Grow>
-  );
-}
-
-function ConnectingCard({
-  integration,
-  state,
-  onRefreshQr,
-  onCancel,
-}: {
-  integration: Integration;
-  state: EvolutionState;
-  onRefreshQr: (id: string) => void;
-  onCancel: (id: string) => void;
-}) {
-  const isGenerating = state.phase === 'generating';
-  const isAwaitingScan = state.phase === 'awaiting_scan';
-  const isError = state.phase === 'error';
-
-  return (
-    <Zoom in timeout={300}>
-      <Card
-        sx={{
-          mb: 2,
-          borderRadius: 3,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-          border: '2px solid',
-          borderColor: isError ? 'error.main' : 'primary.main',
-          overflow: 'visible',
-        }}
-      >
-        <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: 2,
-                bgcolor: isError ? 'error.50' : 'primary.50',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 20,
-              }}
-            >
-              {isAwaitingScan ? '\u{1F4CB}' : isError ? '\u26A0\uFE0F' : '\u{1F9EC}'}
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
-                {integration.name}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {providerLabels.evolution}
-              </Typography>
-            </Box>
-            <Chip
-              label={PHASE_LABELS[state.phase]}
-              color={PHASE_COLORS[state.phase]}
-              size="small"
-              sx={{ fontWeight: 500, borderRadius: 1.5 }}
-            />
-          </Box>
-
-          {isGenerating && (
-            <Fade in timeout={300}>
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <CircularProgress size={48} sx={{ mb: 2 }} />
-                <Typography variant="body2" color="text.secondary">
-                  Gerando QR Code...
-                </Typography>
-              </Box>
-            </Fade>
-          )}
-
-          {isAwaitingScan && state.qrCode && (
-            <Fade in timeout={500}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Box
-                  sx={{
-                    display: 'inline-block',
-                    p: 1.5,
-                    bgcolor: 'white',
-                    borderRadius: 3,
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-                    mb: 2,
-                    border: '1px solid',
-                    borderColor: 'grey.200',
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src={state.qrCode}
-                    alt="QR Code"
-                    sx={{
-                      width: 220,
-                      height: 220,
-                      display: 'block',
-                      imageRendering: 'pixelated',
-                    }}
-                  />
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                  Escaneie o QR Code com o WhatsApp do número que será usado como atendimento
-                </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 2 }}>
-                  <Tooltip title="Atualizar QR Code">
-                    <IconButton size="small" onClick={() => onRefreshQr(integration.id)}>
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-                <Box sx={{ width: '100%', maxWidth: 280, mx: 'auto', mb: 1 }}>
-                  <Box
-                    sx={{
-                      height: 4,
-                      borderRadius: 2,
-                      bgcolor: 'grey.200',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        height: '100%',
-                        borderRadius: 2,
-                        bgcolor: 'primary.main',
-                        animation: 'progress-animation 2s ease-in-out infinite',
-                        '@keyframes progress-animation': {
-                          '0%': { width: '0%', ml: 0 },
-                          '50%': { width: '60%', ml: '20%' },
-                          '100%': { width: '0%', ml: '100%' },
-                        },
-                      }}
-                    />
-                  </Box>
-                </Box>
-                <Typography variant="caption" color="text.disabled">
-                  Aguardando leitura... O status é verificado automaticamente.
-                </Typography>
-              </Box>
-            </Fade>
-          )}
-
-          {isError && (
-            <Fade in timeout={300}>
-              <Box sx={{ textAlign: 'center', py: 2 }}>
-                <ErrorIcon color="error" sx={{ fontSize: 40, mb: 1 }} />
-                <Typography variant="body2" color="error.main" sx={{ mb: 2 }}>
-                  {state.errorMessage || 'Erro ao conectar. Tente novamente.'}
-                </Typography>
-              </Box>
-            </Fade>
-          )}
-
-          <Box sx={{ mt: 2.5, display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              color="inherit"
-              size="small"
-              onClick={() => onCancel(integration.id)}
-              sx={{ borderRadius: 2, textTransform: 'none' }}
-            >
-              Cancelar
-            </Button>
-            {isError && (
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<RefreshIcon />}
-                onClick={() => onRefreshQr(integration.id)}
-                sx={{ borderRadius: 2, textTransform: 'none' }}
-              >
-                Tentar novamente
-              </Button>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
-    </Zoom>
-  );
-}
-
-interface OtherIntegrationCardProps {
-  integration: Integration;
-  onEdit: (integration: Integration) => void;
-  onDelete: (integration: Integration) => void;
-  onTest: (integration: Integration) => void;
-  testingId: string | null;
-}
-
-function OtherIntegrationCard({ integration, onEdit, onDelete, onTest, testingId }: OtherIntegrationCardProps) {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
-
-  const handleMenuOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget);
-  const handleMenuClose = () => setAnchorEl(null);
-
-  const handleAction = (cb: () => void) => {
-    handleMenuClose();
-    cb();
-  };
-
-  return (
-    <Card
-      sx={{
-        mb: 1,
-        borderRadius: 2,
-        boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
-        border: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body1">
-              {providerIcons[integration.provider] || '\u{1F4E6}'} {integration.name}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {providerLabels[integration.provider] || integration.provider}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Chip
-              label={
-                integration.status === 'active'
-                  ? 'Ativo'
-                  : integration.status === 'error'
-                    ? 'Erro'
-                    : 'Inativo'
-              }
-              color={
-                integration.status === 'active'
-                  ? 'success'
-                  : integration.status === 'error'
-                    ? 'error'
-                    : 'default'
-              }
-              size="small"
-              sx={{ fontWeight: 500, borderRadius: 1.5 }}
-            />
-            <IconButton size="small" onClick={handleMenuOpen}>
-              <MoreVertIcon fontSize="small" />
-            </IconButton>
-            <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose} transformOrigin={{ horizontal: 'right', vertical: 'top' }} anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}>
-              <MenuItem onClick={() => handleAction(() => onTest(integration))} dense disabled={testingId === integration.id}>
-                {testingId === integration.id ? <CircularProgress size={16} sx={{ mr: 1.5 }} /> : <PlayArrowIcon sx={{ mr: 1.5, fontSize: 18 }} />}
-                Testar conexão
-              </MenuItem>
-              <MenuItem onClick={() => handleAction(() => onEdit(integration))} dense>
-                <EditIcon sx={{ mr: 1.5, fontSize: 18 }} /> Editar
-              </MenuItem>
-              <MenuItem onClick={() => handleAction(() => onDelete(integration))} dense>
-                <DeleteIcon sx={{ mr: 1.5, fontSize: 18 }} /> Excluir
-              </MenuItem>
-            </Menu>
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
+type PageState = 'loading' | 'no_connection' | 'connected';
 
 type SnackbarState = {
   open: boolean;
@@ -490,545 +43,398 @@ type SnackbarState = {
   severity: 'success' | 'error' | 'info';
 };
 
-const defaultFormData = {
-  name: '',
-};
-
 export default function IntegrationsPage() {
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [evolutionStates, setEvolutionStates] = useState<Record<string, EvolutionState>>({});
-  const pollIntervals = useRef<Record<string, ReturnType<typeof setInterval>>>({});
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ ...defaultFormData });
-  const [dialogError, setDialogError] = useState('');
-  const [dialogSaving, setDialogSaving] = useState(false);
-  const [testingId, setTestingId] = useState<string | null>(null);
-  const [refreshingId, setRefreshingId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [disconnectTarget, setDisconnectTarget] = useState<Integration | null>(null);
-  const [disconnecting, setDisconnecting] = useState(false);
-  const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
+  const [pageState, setPageState] = useState<PageState>('loading');
+  const [integrationId, setIntegrationId] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
 
-  const showSnackbar = (message: string, severity: 'success' | 'error' | 'info') => {
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrPhase, setQrPhase] = useState<'generating' | 'awaiting' | 'error'>('generating');
+  const [qrError, setQrError] = useState('');
+
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
+  const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const showSnack = (message: string, severity: 'success' | 'error' | 'info') => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const clearPolling = useCallback((id: string) => {
-    if (pollIntervals.current[id]) {
-      clearInterval(pollIntervals.current[id]);
-      delete pollIntervals.current[id];
+  const clearPolling = useCallback(() => {
+    if (pollInterval.current) {
+      clearInterval(pollInterval.current);
+      pollInterval.current = null;
     }
   }, []);
 
-  const setEvolutionState = useCallback((id: string, updater: EvolutionState | ((prev: EvolutionState) => EvolutionState)) => {
-    setEvolutionStates((prev) => ({
-      ...prev,
-      [id]: typeof updater === 'function' ? updater(prev[id]) : updater,
-    }));
-  }, []);
+  const startPolling = useCallback((id: string) => {
+    clearPolling();
+    pollInterval.current = setInterval(async () => {
+      try {
+        const r = await api.get(`/integrations/${id}/evolution_status/`);
+        const status = r.data.connection_status;
+        if (status === 'connected') {
+          clearPolling();
+          setQrDialogOpen(false);
+          setPageState('connected');
+          const r2 = await api.get(`/integrations/${id}/`);
+          setPhoneNumber(formatBrazilianPhone(r2.data.connected_number || ''));
+          showSnack('WhatsApp conectado com sucesso!', 'success');
+        }
+      } catch {
+        // keep polling
+      }
+    }, 3000);
+  }, [clearPolling]);
 
-  const fetchIntegrations = useCallback(async () => {
+  const loadIntegration = useCallback(async () => {
     try {
       const r = await api.get('/integrations/');
-      setIntegrations(r.data.results || r.data);
+      const list = r.data.results || r.data || [];
+      const integration = list.find((i: Integration) => i.provider === 'evolution') || list[0];
+      if (integration) {
+        setIntegrationId(integration.id);
+        if (integration.status === 'connected' || integration.status === 'active') {
+          setPageState('connected');
+          setPhoneNumber(formatBrazilianPhone(integration.connected_number || ''));
+        } else {
+          setPageState('no_connection');
+        }
+      } else {
+        setPageState('no_connection');
+      }
     } catch {
-      // ignore
-    } finally {
-      setLoading(false);
+      setPageState('no_connection');
     }
   }, []);
 
   useEffect(() => {
-    fetchIntegrations();
-    return () => {
-      Object.values(pollIntervals.current).forEach(clearInterval);
-    };
-  }, [fetchIntegrations]);
+    loadIntegration();
+    return clearPolling;
+  }, [loadIntegration, clearPolling]);
 
-  const startPolling = useCallback(
-    (integrationId: string, integrationName?: string, integrationWebhookUrl?: string) => {
-      clearPolling(integrationId);
-      pollIntervals.current[integrationId] = setInterval(async () => {
-        try {
-          const r = await api.get(`/integrations/${integrationId}/evolution_status/`);
-          const status = r.data.connection_status;
-          setEvolutionState(integrationId, (prev) => ({
-            ...prev,
-            phase: status === 'connected' ? 'connected' : status === 'error' ? 'error' : 'awaiting_scan',
-          }));
-          if (status === 'connected') {
-            setEvolutionState(integrationId, (prev) => ({
-              ...prev,
-              qrCode: '',
-              connectedInfo: {
-                instanceName: r.data.instance_name || integrationName || '',
-                channelId: r.data.channel_id || '',
-                connectedAt: r.data.last_sync_at || new Date().toISOString(),
-                webhookUrl: integrationWebhookUrl || '',
-              },
-            }));
-            clearPolling(integrationId);
-            fetchIntegrations();
-          }
-        } catch {
-          // ignore
-        }
-      }, 3000);
-    },
-    [clearPolling, setEvolutionState, fetchIntegrations],
-  );
-
-  const openCreateDialog = () => {
-    setEditingId(null);
-    setFormData({ ...defaultFormData });
-    setDialogError('');
-    setDialogOpen(true);
-  };
-
-  const openEditDialog = (integration: Integration) => {
-    setEditingId(integration.id);
-    setFormData({ name: integration.name });
-    setDialogError('');
-    setDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    setDialogError('');
-    setDialogSaving(true);
+  const handleConnect = async () => {
     try {
-      if (editingId) {
-        await api.patch(`/integrations/${editingId}/`, { name: formData.name });
-        showSnackbar('Integração atualizada com sucesso', 'success');
-      } else {
-        await api.post('/integrations/', { name: formData.name });
-        showSnackbar('Integração criada com sucesso', 'success');
-      }
-      setDialogOpen(false);
-      setFormData({ ...defaultFormData });
-      fetchIntegrations();
-    } catch (err) {
-      console.error('Erro ao salvar integração:', err);
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? String((err as { response: { data?: { error?: string } } }).response?.data?.error || 'Erro ao salvar integração')
-          : 'Erro ao salvar integração';
-      setDialogError(msg);
-    } finally {
-      setDialogSaving(false);
-    }
-  };
+      const id = integrationId || (await api.post('/integrations/', { name: 'WhatsApp' })).data.id as string;
+      if (!id) return;
+      if (!integrationId) setIntegrationId(id);
 
-  const handleTestConnection = async (integration: Integration) => {
-    setTestingId(integration.id);
-    try {
-      const r = await api.post(`/integrations/${integration.id}/test/`);
-      showSnackbar(r.data.message || 'Conexão testada com sucesso', 'success');
-    } catch (err) {
-      console.error('Erro ao testar conexão:', err);
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? String((err as { response: { data?: { error?: string } } }).response?.data?.error || 'Erro ao testar conexão')
-          : 'Erro ao testar conexão';
-      showSnackbar(msg, 'error');
-    } finally {
-      setTestingId(null);
-    }
-  };
+      setQrDialogOpen(true);
+      setQrPhase('generating');
+      setQrCode(null);
+      setQrError('');
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await api.delete(`/integrations/${deleteTarget.id}/`);
-      showSnackbar('Integração excluída com sucesso', 'success');
-      setDeleteTarget(null);
-      fetchIntegrations();
-    } catch (err) {
-      console.error('Erro ao excluir integração:', err);
-      showSnackbar('Erro ao excluir integração', 'error');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleConnect = async (integrationId: string) => {
-    const existing = evolutionStates[integrationId];
-    if (existing && (existing.phase === 'generating' || existing.phase === 'awaiting_scan')) {
-      return;
-    }
-    if (existing && existing.phase === 'connected') {
-      return;
-    }
-
-    const integ = integrations.find((i) => i.id === integrationId);
-
-    setEvolutionState(integrationId, {
-      phase: 'generating',
-      qrCode: '',
-      errorMessage: '',
-      connectedInfo: null,
-    });
-
-    try {
-      const r = await api.post(`/integrations/${integrationId}/evolution_connect/`);
+      const r = await api.post(`/integrations/${id}/evolution_connect/`);
       const qr = r.data.qr_code || '';
       const status = r.data.connection_status || 'pending';
 
       if (status === 'connected') {
-        setEvolutionState(integrationId, {
-          phase: 'connected',
-          qrCode: '',
-          errorMessage: '',
-          connectedInfo: {
-            instanceName: r.data.instance_name || '',
-            channelId: r.data.channel_id || '',
-            connectedAt: r.data.last_sync_at || new Date().toISOString(),
-            webhookUrl: integ?.webhook_url || '',
-          },
-        });
-        fetchIntegrations();
-      } else if (qr) {
-        setEvolutionState(integrationId, {
-          phase: 'awaiting_scan',
-          qrCode: qr,
-          errorMessage: '',
-          connectedInfo: null,
-        });
-        startPolling(integrationId, integ?.name, integ?.webhook_url);
-      } else {
-        setEvolutionState(integrationId, {
-          phase: 'awaiting_scan',
-          qrCode: '',
-          errorMessage: '',
-          connectedInfo: null,
-        });
-        startPolling(integrationId, integ?.name, integ?.webhook_url);
+        setQrDialogOpen(false);
+        setPageState('connected');
+        setPhoneNumber(formatBrazilianPhone(r.data.connected_number || ''));
+        showSnack('WhatsApp conectado com sucesso!', 'success');
+        return;
       }
-    } catch (err: unknown) {
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? String((err as { response: { data: { error?: string } } }).response?.data?.error || 'Erro ao conectar')
-          : 'Erro ao conectar';
-      setEvolutionState(integrationId, {
-        phase: 'error',
-        qrCode: '',
-        errorMessage: msg,
-        connectedInfo: null,
-      });
+
+      if (qr) {
+        setQrCode(qr);
+        setQrPhase('awaiting');
+        startPolling(id);
+      } else {
+        setQrPhase('awaiting');
+        startPolling(id);
+      }
+    } catch {
+      setQrPhase('error');
+      setQrError('Erro ao conectar. Tente novamente.');
+      showSnack('Erro ao conectar WhatsApp.', 'error');
     }
   };
 
-  const handleDisconnectClick = (integration: Integration) => {
-    setDisconnectTarget(integration);
+  const handleRefreshQr = async () => {
+    if (!integrationId) return;
+    setQrPhase('generating');
+    try {
+      const r = await api.get(`/integrations/${integrationId}/evolution_qrcode/`);
+      const qr = r.data.qr_code || '';
+      if (qr) {
+        setQrCode(qr);
+        setQrPhase('awaiting');
+      } else {
+        setQrPhase('awaiting');
+      }
+    } catch {
+      setQrPhase('error');
+      setQrError('Erro ao obter QR Code.');
+    }
+  };
+
+  const handleCloseQr = () => {
+    setQrDialogOpen(false);
+    clearPolling();
+  };
+
+  const handleOpenDisconnect = () => {
+    setDisconnectDialogOpen(true);
   };
 
   const handleDisconnectConfirm = async () => {
-    if (!disconnectTarget) return;
+    if (!integrationId) return;
     setDisconnecting(true);
     try {
-      await api.post(`/integrations/${disconnectTarget.id}/evolution_disconnect/`);
-      showSnackbar('WhatsApp desconectado com sucesso', 'success');
-      setDisconnectTarget(null);
-      clearPolling(disconnectTarget.id);
-      setEvolutionState(disconnectTarget.id, {
-        phase: 'disconnected',
-        qrCode: '',
-        errorMessage: '',
-        connectedInfo: null,
-      });
-      fetchIntegrations();
-    } catch (err) {
-      console.error('Erro ao desconectar:', err);
-      showSnackbar('Erro ao desconectar WhatsApp', 'error');
+      await api.post(`/integrations/${integrationId}/evolution_disconnect/`);
+      setDisconnectDialogOpen(false);
+      setPageState('no_connection');
+      setPhoneNumber(null);
+      clearPolling();
+      showSnack('WhatsApp desconectado com sucesso.', 'success');
+    } catch {
+      showSnack('Erro ao desconectar WhatsApp.', 'error');
     } finally {
       setDisconnecting(false);
     }
   };
 
-  const handleRefreshStatus = async (integration: Integration) => {
-    setRefreshingId(integration.id);
-    try {
-      const r = await api.get(`/integrations/${integration.id}/evolution_status/`);
-      const status = r.data.connection_status;
-      if (status === 'connected') {
-        showSnackbar('WhatsApp permanece conectado', 'success');
-      } else {
-        showSnackbar('WhatsApp está desconectado', 'info');
-        fetchIntegrations();
-      }
-    } catch (err) {
-      console.error('Erro ao atualizar status:', err);
-      showSnackbar('Erro ao verificar status', 'error');
-    } finally {
-      setRefreshingId(null);
-    }
-  };
-
-  const handleRefreshQr = async (integrationId: string) => {
-    setEvolutionState(integrationId, (prev) => ({
-      ...prev,
-      phase: 'generating',
-    }));
-    try {
-      const r = await api.get(`/integrations/${integrationId}/evolution_qrcode/`);
-      const qr = r.data.qr_code || '';
-      if (qr) {
-        setEvolutionState(integrationId, (prev) => ({
-          ...prev,
-          phase: 'awaiting_scan',
-          qrCode: qr,
-          errorMessage: '',
-        }));
-      } else {
-        setEvolutionState(integrationId, (prev) => ({
-          ...prev,
-          phase: 'awaiting_scan',
-        }));
-      }
-    } catch (err: unknown) {
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? String((err as { response: { data: { error?: string } } }).response?.data?.error || 'Erro ao obter QR Code')
-          : 'Erro ao obter QR Code';
-      setEvolutionState(integrationId, {
-        phase: 'disconnected',
-        qrCode: '',
-        errorMessage: msg,
-        connectedInfo: null,
-      });
-    }
-  };
-
-  const handleCancel = (integrationId: string) => {
-    clearPolling(integrationId);
-    setEvolutionState(integrationId, {
-      phase: 'disconnected',
-      qrCode: '',
-      errorMessage: '',
-      connectedInfo: null,
-    });
-  };
-
-  const evolutionIntegrations = integrations.filter((i) => i.provider === 'evolution');
-  const otherIntegrations = integrations.filter((i) => i.provider !== 'evolution');
+  if (pageState === 'loading') {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ mb: 4 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700}>
-            Integrações
+          <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            WhatsApp
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Conecte e gerencie seus canais de atendimento
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            Conecte o número utilizado para atender seus clientes.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={openCreateDialog}
-          sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, px: 2.5 }}
-        >
-          Nova Integração
-        </Button>
       </Box>
 
-      {evolutionIntegrations.length > 0 && (
-        <Box mb={4}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              Evolution API
-            </Typography>
-            <Chip
-              label={`${evolutionIntegrations.length} integração(ões)`}
-              size="small"
-              variant="outlined"
-              sx={{ borderRadius: 1.5 }}
-            />
+      {pageState === 'no_connection' && (
+        <Fade in timeout={400}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 6,
+                textAlign: 'center',
+                maxWidth: 440,
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <Box sx={{ fontSize: 64, mb: 2, lineHeight: 1 }}>{'\u{1F4F1}'}</Box>
+              <Typography variant="h5" fontWeight={700} gutterBottom>
+                WhatsApp
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, px: 2 }}>
+                Nenhum número conectado. Conecte um número de WhatsApp para começar a atender seus clientes.
+              </Typography>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<LinkIcon />}
+                onClick={handleConnect}
+                sx={{
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 4,
+                  py: 1.2,
+                  boxShadow: '0 4px 14px rgba(130, 10, 209, 0.35)',
+                  '&:hover': {
+                    boxShadow: '0 6px 24px rgba(130, 10, 209, 0.45)',
+                  },
+                }}
+              >
+                Conectar WhatsApp
+              </Button>
+            </Paper>
           </Box>
+        </Fade>
+      )}
 
-          {evolutionIntegrations.map((integration) => {
-            const state = evolutionStates[integration.id];
+      {pageState === 'connected' && (
+        <Fade in timeout={400}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 5,
+                textAlign: 'center',
+                maxWidth: 440,
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'success.light',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <Box
+                sx={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: '50%',
+                  bgcolor: 'success.light',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mx: 'auto',
+                  mb: 2,
+                }}
+              >
+                <CheckCircleIcon sx={{ fontSize: 40, color: 'success.main' }} />
+              </Box>
+              <Typography variant="h5" fontWeight={700} color="success.main" gutterBottom>
+                {'\u{1F7E2} Conectado'}
+              </Typography>
+              {phoneNumber && (
+                <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
+                  {phoneNumber}
+                </Typography>
+              )}
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Seu WhatsApp está conectado e pronto para receber mensagens.
+              </Typography>
+              <Button
+                variant="outlined"
+                color="error"
+                size="large"
+                startIcon={<LinkOffIcon />}
+                onClick={handleOpenDisconnect}
+                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, px: 3 }}
+              >
+                Desconectar WhatsApp
+              </Button>
+            </Paper>
+          </Box>
+        </Fade>
+      )}
 
-            if (state && (state.phase === 'generating' || state.phase === 'awaiting_scan' || state.phase === 'error')) {
-              return (
-                <ConnectingCard
-                  key={integration.id}
-                  integration={integration}
-                  state={state}
-                  onRefreshQr={handleRefreshQr}
-                  onCancel={handleCancel}
+      <Dialog open={qrDialogOpen} onClose={handleCloseQr} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ textAlign: 'center', fontWeight: 600, pt: 3 }}>
+          Conectar WhatsApp
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', pb: 3 }}>
+          {qrPhase === 'generating' && (
+            <Box sx={{ py: 6 }}>
+              <CircularProgress size={48} sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary">
+                Gerando QR Code...
+              </Typography>
+            </Box>
+          )}
+
+          {qrPhase === 'awaiting' && qrCode && (
+            <Box>
+              <Box
+                sx={{
+                  display: 'inline-block',
+                  p: 1.5,
+                  bgcolor: 'white',
+                  borderRadius: 3,
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                  mb: 2,
+                  border: '1px solid',
+                  borderColor: 'grey.200',
+                }}
+              >
+                <Box
+                  component="img"
+                  src={qrCode}
+                  alt="QR Code"
+                  sx={{ width: 220, height: 220, display: 'block' }}
                 />
-              );
-            }
-
-            return (
-              <EvolutionCard
-                key={integration.id}
-                integration={integration}
-                onConnect={handleConnect}
-                onDisconnect={handleDisconnectClick}
-                onRefreshStatus={handleRefreshStatus}
-                onEdit={openEditDialog}
-                onDelete={setDeleteTarget}
-                onTest={handleTestConnection}
-                testingId={testingId}
-                refreshingId={refreshingId}
-              />
-            );
-          })}
-        </Box>
-      )}
-
-      {otherIntegrations.length > 0 && (
-        <Box mb={4}>
-          <Typography variant="subtitle1" fontWeight={600} mb={2}>
-            Outras Integrações
-          </Typography>
-          {otherIntegrations.map((integration) => (
-            <OtherIntegrationCard
-              key={integration.id}
-              integration={integration}
-              onEdit={openEditDialog}
-              onDelete={setDeleteTarget}
-              onTest={handleTestConnection}
-              testingId={testingId}
-            />
-          ))}
-        </Box>
-      )}
-
-      {integrations.length === 0 && !loading && (
-        <Paper
-          sx={{
-            p: 6,
-            textAlign: 'center',
-            borderRadius: 3,
-            bgcolor: 'grey.50',
-            border: '2px dashed',
-            borderColor: 'grey.300',
-          }}
-        >
-          <Box sx={{ fontSize: 48, mb: 2 }}>{'\u{1F4E6}'}</Box>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            Nenhuma integração cadastrada
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Clique em "Nova Integração" para conectar um canal de atendimento.
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openCreateDialog}
-            sx={{ borderRadius: 2, textTransform: 'none' }}
-          >
-            Nova Integração
-          </Button>
-        </Paper>
-      )}
-
-      <Dialog
-        open={dialogOpen}
-        onClose={() => !dialogSaving && setDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { borderRadius: 3 },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>{editingId ? 'Editar Integração' : 'Nova Integração'}</DialogTitle>
-        <DialogContent>
-          {dialogError && (
-            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-              {dialogError}
-            </Alert>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Escaneie este QR Code utilizando o aplicativo WhatsApp.
+              </Typography>
+              <Typography variant="body2" color="text.disabled" sx={{ mb: 2 }}>
+                Aguardando conexão...
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleCloseQr}
+                  sx={{ borderRadius: 2, textTransform: 'none' }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<RefreshIcon />}
+                  onClick={handleRefreshQr}
+                  sx={{ borderRadius: 2, textTransform: 'none' }}
+                >
+                  Atualizar QR Code
+                </Button>
+              </Box>
+            </Box>
           )}
-          <TextField
-            fullWidth
-            size="small"
-            label="Nome"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            disabled={dialogSaving}
-          />
+
+          {qrPhase === 'awaiting' && !qrCode && (
+            <Box sx={{ py: 4 }}>
+              <CircularProgress size={48} sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary">
+                Aguardando QR Code...
+              </Typography>
+            </Box>
+          )}
+
+          {qrPhase === 'error' && (
+            <Box sx={{ py: 4 }}>
+              <Box sx={{ fontSize: 48, mb: 1 }}>{'\u26A0\uFE0F'}</Box>
+              <Typography variant="body2" color="error.main" sx={{ mb: 2 }}>
+                {qrError || 'Erro ao conectar. Tente novamente.'}
+              </Typography>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleRefreshQr}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                Tentar novamente
+              </Button>
+            </Box>
+          )}
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setDialogOpen(false)} disabled={dialogSaving} sx={{ borderRadius: 2, textTransform: 'none' }}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={!formData.name || dialogSaving}
-            sx={{ borderRadius: 2, textTransform: 'none' }}
-          >
-            {dialogSaving ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-            {editingId ? 'Atualizar' : 'Salvar'}
-          </Button>
-        </DialogActions>
       </Dialog>
 
       <Dialog
-        open={!!deleteTarget}
-        onClose={() => !deleting && setDeleteTarget(null)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>Excluir Integração</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Deseja realmente excluir esta integração?
-          </Typography>
-          {deleteTarget && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {deleteTarget.name} ({providerLabels[deleteTarget.provider] || deleteTarget.provider})
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting} sx={{ borderRadius: 2, textTransform: 'none' }}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-            sx={{ borderRadius: 2, textTransform: 'none' }}
-          >
-            {deleting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-            Excluir
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={!!disconnectTarget}
-        onClose={() => !disconnecting && setDisconnectTarget(null)}
+        open={disconnectDialogOpen}
+        onClose={() => setDisconnectDialogOpen(false)}
         maxWidth="xs"
         fullWidth
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogTitle sx={{ fontWeight: 600 }}>Desconectar WhatsApp</DialogTitle>
         <DialogContent>
-          <Typography>
-            Deseja realmente desconectar este WhatsApp?
+          <Typography variant="body2" color="text.secondary">
+            Deseja realmente desconectar o WhatsApp? Esta ação encerrará a sessão atual.
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Esta ação encerrará a sessão atual.
-          </Typography>
-          {disconnectTarget && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {disconnectTarget.name}
+          {phoneNumber && (
+            <Typography variant="body2" fontWeight={500} sx={{ mt: 1.5 }}>
+              {phoneNumber}
             </Typography>
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setDisconnectTarget(null)} disabled={disconnecting} sx={{ borderRadius: 2, textTransform: 'none' }}>
+          <Button
+            onClick={() => setDisconnectDialogOpen(false)}
+            disabled={disconnecting}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
+          >
             Cancelar
           </Button>
           <Button
@@ -1038,8 +444,7 @@ export default function IntegrationsPage() {
             disabled={disconnecting}
             sx={{ borderRadius: 2, textTransform: 'none' }}
           >
-            {disconnecting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-            Desconectar
+            {disconnecting ? <CircularProgress size={20} /> : 'Desconectar'}
           </Button>
         </DialogActions>
       </Dialog>

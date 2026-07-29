@@ -57,7 +57,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: Props) {
     { label: 'Clientes', path: '/clients', icon: <PeopleIcon /> },
     { label: 'Departamentos', path: '/departments', icon: <BusinessIcon /> },
     { label: 'Usuários', path: '/users', icon: <GroupIcon />, roles: ['super_admin', 'admin'] },
-    { label: 'Integrações', path: '/integrations', icon: <ExtensionIcon />, roles: ['super_admin', 'admin'] },
+    { label: 'WhatsApp', path: '/integrations', icon: <ExtensionIcon />, roles: ['super_admin', 'admin'] },
     { label: 'Relatórios', path: '/reports', icon: <BarChartIcon />, roles: ['super_admin', 'admin', 'supervisor'] },
     { label: 'Configurações', path: '/settings', icon: <SettingsIcon /> },
   ];
