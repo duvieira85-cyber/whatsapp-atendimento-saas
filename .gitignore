@@ -22,8 +22,12 @@ frontend/dist/
 
 # Environment
 .env
+.env.production
+.env.staging
 backend/.env
+backend/.env.production
 frontend/.env
+frontend/.env.production
 
 # IDE
 .idea/

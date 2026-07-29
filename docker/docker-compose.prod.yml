@@ -1,0 +1,198 @@
+version: '3.8'
+
+volumes:
+  postgres_data:
+    name: whatsapp_postgres_data
+  redis_data:
+    name: whatsapp_redis_data
+  evolution_instances:
+    name: whatsapp_evolution_instances
+  backend_static:
+    name: whatsapp_backend_static
+  backend_media:
+    name: whatsapp_backend_media
+  logs:
+    name: whatsapp_logs
+
+networks:
+  whatsapp_network:
+    name: whatsapp_network
+    driver: bridge
+
+services:
+  db:
+    image: postgres:16
+    container_name: whatsapp-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - whatsapp_network
+    environment:
+      POSTGRES_DB: ${DB_NAME:-whatsapp_service}
+      POSTGRES_USER: ${DB_USER:-whatsapp_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-whatsapp_user} -d ${DB_NAME:-whatsapp_service}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - whatsapp_network
+    ports:
+      - "127.0.0.1:6380:6379"
+    command: redis-server --appendonly yes
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile.prod
+    image: whatsapp-backend:latest
+    container_name: whatsapp-backend
+    restart: unless-stopped
+    volumes:
+      - backend_static:/app/staticfiles
+      - backend_media:/app/media
+      - logs:/app/logs
+    networks:
+      - whatsapp_network
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - ../backend/.env.production
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://whatsapp.insights-software.dev.br/api}
+        VITE_WS_URL: ${VITE_WS_URL:-wss://whatsapp.insights-software.dev.br/ws}
+    image: whatsapp-frontend:latest
+    container_name: whatsapp-frontend
+    restart: unless-stopped
+    networks:
+      - whatsapp_network
+    depends_on:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: whatsapp-evolution
+    restart: unless-stopped
+    networks:
+      - whatsapp_network
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      SERVER_URL: "http://evolution:8080"
+      LOG_LEVEL: "ERROR"
+      DEL_INSTANCE: "false"
+      DATABASE_PROVIDER: "postgresql"
+      DATABASE_CONNECTION_URI: "postgresql://${DB_USER:-whatsapp_user}:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/evolution_db"
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: "redis://redis:6379/1"
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}"
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      QRCODE_LIMIT: "30"
+      WEBHOOK_GLOBAL_URL: "${EVOLUTION_WEBHOOK_BASE_URL:-https://whatsapp.insights-software.dev.br}/api/integrations/webhooks/evolution/"
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_APPLICATION_STARTUP: "false"
+      WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
+      WEBHOOK_EVENTS_MESSAGES_SET: "true"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_MESSAGES_EDITED: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "false"
+      WEBHOOK_EVENTS_MESSAGES_DELETE: "false"
+      WEBHOOK_EVENTS_SEND_MESSAGE: "false"
+      WEBHOOK_EVENTS_CONTACTS_SET: "false"
+      WEBHOOK_EVENTS_CONTACTS_UPSERT: "false"
+      WEBHOOK_EVENTS_PRESENCE_UPDATE: "false"
+      WEBHOOK_EVENTS_CHATS_SET: "false"
+      WEBHOOK_EVENTS_CHATS_UPSERT: "false"
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+      WEBHOOK_EVENTS_CALL: "false"
+      CONFIG_SESSION_PHONE_CLIENT: "WhatsApp Atendimento"
+      CONFIG_SESSION_PHONE_NAME: "Chrome"
+    volumes:
+      - evolution_instances:/evolution/instances
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: whatsapp-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf
+      - backend_static:/static:ro
+      - backend_media:/media:ro
+      - logs:/var/log/nginx
+    networks:
+      - whatsapp_network
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+      - "${NGINX_SSL_PORT:-8443}:443"
+    depends_on:
+      - backend
+      - frontend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
