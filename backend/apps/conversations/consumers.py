@@ -5,8 +5,6 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger(__name__)
 from channels.db import database_sync_to_async
-from django.contrib.auth import get_user_model
-User = get_user_model()
 
 
 class RateLimiter:
@@ -28,6 +26,8 @@ class JwtAuthMixin:
     async def authenticate(self):
         from rest_framework_simplejwt.tokens import AccessToken
         from rest_framework_simplejwt.exceptions import TokenError
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         query_string = self.scope.get('query_string', b'').decode()
         params = {}
         for p in query_string.split('&'):
