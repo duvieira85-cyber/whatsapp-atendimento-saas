@@ -18,6 +18,9 @@ networks:
   whatsapp_network:
     name: whatsapp_network_prod
     driver: bridge
+  food_platform:
+    name: food-platform
+    external: true
 
 services:
   db:
@@ -183,6 +186,9 @@ services:
       - logs:/var/log/nginx
     networks:
       - whatsapp_network
+      - name: food_platform
+        aliases:
+          - whatsapp-nginx
     ports:
       - "${NGINX_PORT:-8080}:80"
       - "${NGINX_SSL_PORT:-8443}:443"
