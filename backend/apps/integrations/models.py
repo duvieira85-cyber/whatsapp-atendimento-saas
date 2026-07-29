@@ -11,7 +11,7 @@ class IntegrationProvider(models.TextChoices):
 
 
 class EvolutionConfig(models.Model):
-    url = models.URLField(max_length=500, verbose_name=_('URL da Evolution API'))
+    url = models.CharField(max_length=500, verbose_name=_('URL da Evolution API'))
     api_key = models.CharField(max_length=255, verbose_name=_('API Key'))
 
     class Meta:
