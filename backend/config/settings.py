@@ -175,7 +175,10 @@ if not DEBUG:
 
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
-EVOLUTION_WEBHOOK_BASE_URL = config('EVOLUTION_WEBHOOK_BASE_URL', default='http://backend:8000')
+EVOLUTION_API_URL = config('EVOLUTION_API_URL', default='http://evolution:8080')
+EVOLUTION_API_KEY = config('EVOLUTION_API_KEY', default='')
+EVOLUTION_WEBHOOK_URL = config('EVOLUTION_WEBHOOK_URL', default='')
+EVOLUTION_TIMEOUT = config('EVOLUTION_TIMEOUT', default=30, cast=int)
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'WhatsApp Atendimento SaaS API',

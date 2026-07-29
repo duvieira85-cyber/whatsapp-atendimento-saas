@@ -29,11 +29,6 @@ import {
   LinkOff as LinkOffIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
-  HourglassEmpty as HourglassIcon,
-  Phone as PhoneIcon,
-  Language as LanguageIcon,
-  AccessTime as AccessTimeIcon,
-  Webhook as WebhookIcon,
   Add as AddIcon,
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
@@ -98,22 +93,6 @@ const PHASE_COLORS: Record<ConnectionPhase, 'default' | 'info' | 'warning' | 'su
   error: 'error',
 };
 
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '\u2014';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 interface EvolutionCardProps {
   integration: Integration;
   onConnect: (id: string) => void;
@@ -122,6 +101,13 @@ interface EvolutionCardProps {
   onDelete: (integration: Integration) => void;
   onTest: (integration: Integration) => void;
   testingId: string | null;
+}
+
+function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 13) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  if (digits.length === 12) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  return phone;
 }
 
 function EvolutionCard({
@@ -183,9 +169,15 @@ function EvolutionCard({
                 <Typography variant="subtitle1" fontWeight={600} noWrap>
                   {integration.name}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {providerLabels.evolution}
-                </Typography>
+                {isActive && integration.connected_number ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                    {formatPhone(integration.connected_number)}
+                  </Typography>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    {providerLabels.evolution}
+                  </Typography>
+                )}
               </Box>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
@@ -228,48 +220,6 @@ function EvolutionCard({
               </Menu>
             </Box>
           </Box>
-
-          {isActive && (
-            <Fade in timeout={500}>
-              <Box
-                sx={{
-                  mt: 2.5,
-                  p: 2,
-                  bgcolor: 'grey.50',
-                  borderRadius: 2,
-                  border: '1px solid',
-                  borderColor: 'grey.200',
-                }}
-              >
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {(integration.config?.instance_name as string) || '\u2014'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <LanguageIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {String(integration.config?.evolution_url || '\u2014')}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {formatDate(integration.last_sync_at)}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <WebhookIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                    <Typography variant="body2" color="success.main" fontWeight={500}>
-                      Webhook ativo
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Fade>
-          )}
 
           {!isActive && (
             <Box sx={{ mt: 2.5, display: 'flex', gap: 1 }}>
@@ -572,10 +522,6 @@ export default function IntegrationsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
-  const [evolutionConfig, setEvolutionConfig] = useState<{ url: string; api_key: string } | null>(null);
-  const [configDialogOpen, setConfigDialogOpen] = useState(false);
-  const [configForm, setConfigForm] = useState({ url: '', api_key: '' });
-  const [configSaving, setConfigSaving] = useState(false);
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -595,15 +541,6 @@ export default function IntegrationsPage() {
     }));
   }, []);
 
-  const fetchEvolutionConfig = useCallback(async () => {
-    try {
-      const r = await api.get('/integrations/evolution_config/');
-      setEvolutionConfig(r.data);
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const fetchIntegrations = useCallback(async () => {
     try {
       const r = await api.get('/integrations/');
@@ -617,11 +554,10 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     fetchIntegrations();
-    fetchEvolutionConfig();
     return () => {
       Object.values(pollIntervals.current).forEach(clearInterval);
     };
-  }, [fetchIntegrations, fetchEvolutionConfig]);
+  }, [fetchIntegrations]);
 
   const startPolling = useCallback(
     (integrationId: string, integrationName?: string, integrationWebhookUrl?: string) => {
@@ -655,29 +591,6 @@ export default function IntegrationsPage() {
     },
     [clearPolling, setEvolutionState, fetchIntegrations],
   );
-
-  const openConfigDialog = () => {
-    setConfigForm({
-      url: evolutionConfig?.url || '',
-      api_key: evolutionConfig?.api_key || '',
-    });
-    setConfigDialogOpen(true);
-  };
-
-  const handleSaveConfig = async () => {
-    setConfigSaving(true);
-    try {
-      await api.put('/integrations/evolution_config/', configForm);
-      showSnackbar('Configuração salva com sucesso', 'success');
-      setConfigDialogOpen(false);
-      fetchEvolutionConfig();
-    } catch (err) {
-      console.error('Erro ao salvar config:', err);
-      showSnackbar('Erro ao salvar configuração', 'error');
-    } finally {
-      setConfigSaving(false);
-    }
-  };
 
   const openCreateDialog = () => {
     setEditingId(null);
@@ -904,24 +817,6 @@ export default function IntegrationsPage() {
         </Button>
       </Box>
 
-      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              Configuração Evolution API
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {evolutionConfig
-                ? `URL: ${evolutionConfig.url}`
-                : 'Nenhuma configuração definida'}
-            </Typography>
-          </Box>
-          <Button size="small" variant="outlined" onClick={openConfigDialog} sx={{ borderRadius: 2, textTransform: 'none' }}>
-            {evolutionConfig ? 'Editar' : 'Configurar'}
-          </Button>
-        </Box>
-      </Paper>
-
       {evolutionIntegrations.length > 0 && (
         <Box mb={4}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -1086,52 +981,6 @@ export default function IntegrationsPage() {
           >
             {deleting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
             Excluir
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={configDialogOpen}
-        onClose={() => !configSaving && setConfigDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>Configuração Evolution API</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            size="small"
-            label="URL da Evolution API"
-            placeholder="http://evolution:8080"
-            value={configForm.url}
-            onChange={(e) => setConfigForm({ ...configForm, url: e.target.value })}
-            sx={{ mt: 1 }}
-            disabled={configSaving}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            label="API Key"
-            type="password"
-            value={configForm.api_key}
-            onChange={(e) => setConfigForm({ ...configForm, api_key: e.target.value })}
-            sx={{ mt: 2 }}
-            disabled={configSaving}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setConfigDialogOpen(false)} disabled={configSaving} sx={{ borderRadius: 2, textTransform: 'none' }}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveConfig}
-            disabled={!configForm.url || !configForm.api_key || configSaving}
-            sx={{ borderRadius: 2, textTransform: 'none' }}
-          >
-            {configSaving ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-            Salvar
           </Button>
         </DialogActions>
       </Dialog>

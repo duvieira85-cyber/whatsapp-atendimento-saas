@@ -10,18 +10,6 @@ class IntegrationProvider(models.TextChoices):
     GUPSHUP = 'gupshup', _('Gupshup')
 
 
-class EvolutionConfig(models.Model):
-    url = models.CharField(max_length=500, verbose_name=_('URL da Evolution API'))
-    api_key = models.CharField(max_length=255, verbose_name=_('API Key'))
-
-    class Meta:
-        verbose_name = _('Configuração Evolution')
-        verbose_name_plural = _('Configuração Evolution')
-
-    def __str__(self):
-        return 'Configuração Evolution'
-
-
 class IntegrationStatus(models.TextChoices):
     ACTIVE = 'active', _('Ativo')
     INACTIVE = 'inactive', _('Inativo')

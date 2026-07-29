@@ -20,23 +20,14 @@ class EvolutionService:
 
     def __init__(self, integration: Integration):
         self.integration = integration
-        config = integration.config or {}
-        instance_name = config.get('instance_name', '') or str(integration.id).replace('-', '')
+        instance_name = str(integration.id).replace('-', '')
 
-        evo_url = config.get('evolution_url', '') or ''
-        api_key = config.get('api_key', '') or ''
-
-        if not evo_url or not api_key:
-            from apps.integrations.models import EvolutionConfig
-            evo_config = EvolutionConfig.objects.first()
-            if evo_config:
-                evo_url = evo_config.url
-                api_key = evo_config.api_key
-
+        from django.conf import settings
         self.client = EvolutionAPIClient(
-            base_url=evo_url,
-            api_key=api_key,
+            base_url=settings.EVOLUTION_API_URL,
+            api_key=settings.EVOLUTION_API_KEY,
             instance_name=instance_name,
+            timeout=settings.EVOLUTION_TIMEOUT,
         )
 
     def _get_or_create_channel(self) -> Channel:
@@ -223,13 +214,18 @@ class EvolutionService:
             self.integration.last_sync_at = timezone.now()
             self.integration.save(update_fields=['status', 'last_sync_at'])
 
+            phone = webhook_data.get('session', {}).get('phone', {}).get('number', '')
+            if phone:
+                channel.phone_number = phone
+                channel.save(update_fields=['phone_number'])
+
         if new_status == ChannelStatus.CONNECTED:
             session.qr_code = ''
             session.save(update_fields=['qr_code'])
 
     def _build_webhook_url(self) -> str:
         from django.conf import settings
-        base = settings.EVOLUTION_WEBHOOK_BASE_URL or 'http://backend:8000'
+        base = settings.EVOLUTION_WEBHOOK_URL or 'http://backend:8000'
         return f'{base}/api/integrations/webhooks/evolution/{self.integration.id}/'
 
     @staticmethod

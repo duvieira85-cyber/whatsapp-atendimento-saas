@@ -98,6 +98,19 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [CanManageUsers()]
 
+    def perform_create(self, serializer):
+        user = self.request.user
+        company = user.company
+        if not company:
+            company = serializer.validated_data.get('company')
+        if not company:
+            from apps.companies.models import Company
+            company = Company.objects.first()
+        instance = serializer.save(company=company)
+        if instance.role == 'attendant' and not hasattr(instance, 'attendant_profile'):
+            from .models import Attendant
+            Attendant.objects.create(user=instance)
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user

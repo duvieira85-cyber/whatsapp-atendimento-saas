@@ -3,10 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.conf import settings
 
-from .models import Integration, EvolutionConfig
-from .serializers import IntegrationSerializer, IntegrationCreateSerializer, EvolutionConfigSerializer
-from apps.core.permissions import CanManageCompany, IsAttendant
+from .models import Integration
+from .serializers import IntegrationSerializer, IntegrationCreateSerializer
+from apps.core.permissions import CanManageCompany
 from apps.core.filters import TenantFilterMixin
 
 from .services.evolution_client import EvolutionAPIError
@@ -25,11 +26,7 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return IntegrationSerializer
 
     def perform_create(self, serializer):
-        config_obj = EvolutionConfig.objects.first()
-        config = {}
-        if config_obj:
-            config = {'evolution_url': config_obj.url, 'api_key': config_obj.api_key}
-        serializer.save(provider='evolution', config=config)
+        serializer.save(provider='evolution')
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -40,39 +37,21 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             return qs.filter(company=user.company)
         return qs.none()
 
-    @action(detail=False, methods=['get', 'put', 'post'])
-    def evolution_config(self, request):
-        config_obj = EvolutionConfig.objects.first()
-        if request.method == 'GET':
-            if not config_obj:
-                return Response({'url': '', 'api_key': ''})
-            return Response(EvolutionConfigSerializer(config_obj).data)
-        serializer = EvolutionConfigSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        if config_obj:
-            for key, value in serializer.validated_data.items():
-                setattr(config_obj, key, value)
-            config_obj.save()
-            return Response(EvolutionConfigSerializer(config_obj).data)
-        config_obj = serializer.save()
-        return Response(EvolutionConfigSerializer(config_obj).data, status=status.HTTP_201_CREATED)
-
     @action(detail=True, methods=['post'])
     def test(self, request, pk=None):
         integration = self.get_object()
         if integration.provider != 'evolution':
             return Response({
                 'status': 'ok',
-                'message': f'Configuração de {integration.get_provider_display()} salva corretamente',
+                'message': 'Integração configurada corretamente',
             })
 
-        config_obj = EvolutionConfig.objects.first()
-        evo_url = integration.config.get('evolution_url', '') or (config_obj.url if config_obj else '')
-        api_key = integration.config.get('api_key', '') or (config_obj.api_key if config_obj else '')
+        evo_url = settings.EVOLUTION_API_URL
+        api_key = settings.EVOLUTION_API_KEY
 
         if not evo_url or not api_key:
             return Response(
-                {'error': 'Configure a URL e API Key da Evolution nas configurações globais'},
+                {'error': 'Evolution API não configurada no servidor'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -87,7 +66,7 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             data = client.connection_state()
             return Response({
                 'status': 'ok',
-                'message': 'Conexão com Evolution API estabelecida com sucesso',
+                'message': 'Conexão com Evolution API estabelecida',
                 'details': data,
             })
         except EvolutionAPIError as e:
@@ -101,10 +80,10 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         integration = self.get_object()
         if integration.provider != 'evolution':
             return Response({'error': 'Provider must be evolution'}, status=status.HTTP_400_BAD_REQUEST)
-        config_obj = EvolutionConfig.objects.first()
-        if not config_obj:
+
+        if not settings.EVOLUTION_API_KEY:
             return Response(
-                {'error': 'Configure a URL e API Key da Evolution nas configurações globais'},
+                {'error': 'Evolution API não configurada no servidor'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -114,7 +93,8 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             result = svc.connect()
         except EvolutionAPIError as e:
             return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
-        result['instance_name'] = integration.config.get('instance_name', '')
+        channel = svc._get_or_create_channel()
+        result['connected_number'] = channel.phone_number or ''
         result['last_sync_at'] = integration.last_sync_at.isoformat() if integration.last_sync_at else None
         return Response(result)
 
@@ -161,7 +141,6 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         channel = svc._get_or_create_channel()
         return Response({
             'connection_status': status_val,
-            'instance_name': integration.config.get('instance_name', ''),
-            'channel_id': str(channel.id),
             'last_sync_at': integration.last_sync_at.isoformat() if integration.last_sync_at else None,
+            'connected_number': channel.phone_number or '',
         })

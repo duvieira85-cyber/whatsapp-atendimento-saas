@@ -99,6 +99,7 @@ export interface Integration {
   last_sync_at: string | null;
   created_at: string;
   updated_at: string;
+  connected_number?: string;
 }
 
 export interface DashboardSummary {
