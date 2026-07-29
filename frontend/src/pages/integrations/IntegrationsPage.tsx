@@ -9,10 +9,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   CircularProgress,
   Chip,
   Alert,
@@ -24,6 +20,7 @@ import {
   Grow,
   Zoom,
   Menu,
+  MenuItem,
   Snackbar,
 } from '@mui/material';
 import {
@@ -558,10 +555,7 @@ type SnackbarState = {
 };
 
 const defaultFormData = {
-  provider: 'evolution' as const,
   name: '',
-  evolution_url: '',
-  api_key: '',
 };
 
 export default function IntegrationsPage() {
@@ -578,6 +572,10 @@ export default function IntegrationsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
+  const [evolutionConfig, setEvolutionConfig] = useState<{ url: string; api_key: string } | null>(null);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configForm, setConfigForm] = useState({ url: '', api_key: '' });
+  const [configSaving, setConfigSaving] = useState(false);
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info') => {
     setSnackbar({ open: true, message, severity });
@@ -597,6 +595,15 @@ export default function IntegrationsPage() {
     }));
   }, []);
 
+  const fetchEvolutionConfig = useCallback(async () => {
+    try {
+      const r = await api.get('/integrations/evolution_config/');
+      setEvolutionConfig(r.data);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const fetchIntegrations = useCallback(async () => {
     try {
       const r = await api.get('/integrations/');
@@ -610,10 +617,11 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     fetchIntegrations();
+    fetchEvolutionConfig();
     return () => {
       Object.values(pollIntervals.current).forEach(clearInterval);
     };
-  }, [fetchIntegrations]);
+  }, [fetchIntegrations, fetchEvolutionConfig]);
 
   const startPolling = useCallback(
     (integrationId: string, integrationName?: string, integrationWebhookUrl?: string) => {
@@ -648,6 +656,29 @@ export default function IntegrationsPage() {
     [clearPolling, setEvolutionState, fetchIntegrations],
   );
 
+  const openConfigDialog = () => {
+    setConfigForm({
+      url: evolutionConfig?.url || '',
+      api_key: evolutionConfig?.api_key || '',
+    });
+    setConfigDialogOpen(true);
+  };
+
+  const handleSaveConfig = async () => {
+    setConfigSaving(true);
+    try {
+      await api.put('/integrations/evolution_config/', configForm);
+      showSnackbar('Configuração salva com sucesso', 'success');
+      setConfigDialogOpen(false);
+      fetchEvolutionConfig();
+    } catch (err) {
+      console.error('Erro ao salvar config:', err);
+      showSnackbar('Erro ao salvar configuração', 'error');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
   const openCreateDialog = () => {
     setEditingId(null);
     setFormData({ ...defaultFormData });
@@ -657,12 +688,7 @@ export default function IntegrationsPage() {
 
   const openEditDialog = (integration: Integration) => {
     setEditingId(integration.id);
-    setFormData({
-      provider: integration.provider as 'evolution',
-      name: integration.name,
-      evolution_url: (integration.config?.evolution_url as string) || '',
-      api_key: (integration.config?.api_key as string) || '',
-    });
+    setFormData({ name: integration.name });
     setDialogError('');
     setDialogOpen(true);
   };
@@ -672,24 +698,10 @@ export default function IntegrationsPage() {
     setDialogSaving(true);
     try {
       if (editingId) {
-        await api.patch(`/integrations/${editingId}/`, {
-          provider: formData.provider,
-          name: formData.name,
-          config: {
-            evolution_url: formData.evolution_url,
-            api_key: formData.api_key,
-          },
-        });
+        await api.patch(`/integrations/${editingId}/`, { name: formData.name });
         showSnackbar('Integração atualizada com sucesso', 'success');
       } else {
-        await api.post('/integrations/', {
-          provider: formData.provider,
-          name: formData.name,
-          config: {
-            evolution_url: formData.evolution_url,
-            api_key: formData.api_key,
-          },
-        });
+        await api.post('/integrations/', { name: formData.name });
         showSnackbar('Integração criada com sucesso', 'success');
       }
       setDialogOpen(false);
@@ -892,6 +904,24 @@ export default function IntegrationsPage() {
         </Button>
       </Box>
 
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              Configuração Evolution API
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {evolutionConfig
+                ? `URL: ${evolutionConfig.url}`
+                : 'Nenhuma configuração definida'}
+            </Typography>
+          </Box>
+          <Button size="small" variant="outlined" onClick={openConfigDialog} sx={{ borderRadius: 2, textTransform: 'none' }}>
+            {evolutionConfig ? 'Editar' : 'Configurar'}
+          </Button>
+        </Box>
+      </Paper>
+
       {evolutionIntegrations.length > 0 && (
         <Box mb={4}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -1000,53 +1030,14 @@ export default function IntegrationsPage() {
               {dialogError}
             </Alert>
           )}
-          <FormControl fullWidth size="small" sx={{ mt: 1 }}>
-            <InputLabel>Provedor</InputLabel>
-            <Select
-              value={formData.provider}
-              label="Provedor"
-              onChange={(e) => setFormData({ ...formData, provider: e.target.value as 'evolution' })}
-              disabled={dialogSaving}
-            >
-              <MenuItem value="evolution">Evolution API</MenuItem>
-              <MenuItem value="meta_cloud">Meta Cloud API</MenuItem>
-              <MenuItem value="twilio">Twilio</MenuItem>
-              <MenuItem value="gupshup">Gupshup</MenuItem>
-            </Select>
-          </FormControl>
           <TextField
             fullWidth
             size="small"
             label="Nome"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            sx={{ mt: 2 }}
             disabled={dialogSaving}
           />
-          {formData.provider === 'evolution' && (
-            <>
-              <TextField
-                fullWidth
-                size="small"
-                label="URL da Evolution API"
-                placeholder="http://evolution:8080"
-                value={formData.evolution_url}
-                onChange={(e) => setFormData({ ...formData, evolution_url: e.target.value })}
-                sx={{ mt: 2 }}
-                disabled={dialogSaving}
-              />
-              <TextField
-                fullWidth
-                size="small"
-                label="API Key"
-                type="password"
-                value={formData.api_key}
-                onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                sx={{ mt: 2 }}
-                disabled={dialogSaving}
-              />
-            </>
-          )}
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
           <Button onClick={() => setDialogOpen(false)} disabled={dialogSaving} sx={{ borderRadius: 2, textTransform: 'none' }}>
@@ -1095,6 +1086,52 @@ export default function IntegrationsPage() {
           >
             {deleting ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
             Excluir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={configDialogOpen}
+        onClose={() => !configSaving && setConfigDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>Configuração Evolution API</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            size="small"
+            label="URL da Evolution API"
+            placeholder="http://evolution:8080"
+            value={configForm.url}
+            onChange={(e) => setConfigForm({ ...configForm, url: e.target.value })}
+            sx={{ mt: 1 }}
+            disabled={configSaving}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            label="API Key"
+            type="password"
+            value={configForm.api_key}
+            onChange={(e) => setConfigForm({ ...configForm, api_key: e.target.value })}
+            sx={{ mt: 2 }}
+            disabled={configSaving}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setConfigDialogOpen(false)} disabled={configSaving} sx={{ borderRadius: 2, textTransform: 'none' }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveConfig}
+            disabled={!configForm.url || !configForm.api_key || configSaving}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
+          >
+            {configSaving ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+            Salvar
           </Button>
         </DialogActions>
       </Dialog>

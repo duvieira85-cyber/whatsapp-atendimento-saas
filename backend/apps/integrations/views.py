@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Integration
-from .serializers import IntegrationSerializer, IntegrationCreateSerializer
+from .models import Integration, EvolutionConfig
+from .serializers import IntegrationSerializer, IntegrationCreateSerializer, EvolutionConfigSerializer
 from apps.core.permissions import CanManageCompany, IsAttendant
 from apps.core.filters import TenantFilterMixin
 
@@ -24,6 +24,13 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             return IntegrationCreateSerializer
         return IntegrationSerializer
 
+    def perform_create(self, serializer):
+        config_obj = EvolutionConfig.objects.first()
+        config = {}
+        if config_obj:
+            config = {'evolution_url': config_obj.url, 'api_key': config_obj.api_key}
+        serializer.save(provider='evolution', config=config)
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
@@ -32,6 +39,23 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if user.company:
             return qs.filter(company=user.company)
         return qs.none()
+
+    @action(detail=False, methods=['get', 'put', 'post'])
+    def evolution_config(self, request):
+        config_obj = EvolutionConfig.objects.first()
+        if request.method == 'GET':
+            if not config_obj:
+                return Response({'url': '', 'api_key': ''})
+            return Response(EvolutionConfigSerializer(config_obj).data)
+        serializer = EvolutionConfigSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if config_obj:
+            for key, value in serializer.validated_data.items():
+                setattr(config_obj, key, value)
+            config_obj.save()
+            return Response(EvolutionConfigSerializer(config_obj).data)
+        config_obj = serializer.save()
+        return Response(EvolutionConfigSerializer(config_obj).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def test(self, request, pk=None):
@@ -42,12 +66,13 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 'message': f'Configuração de {integration.get_provider_display()} salva corretamente',
             })
 
-        evo_url = integration.config.get('evolution_url', '')
-        api_key = integration.config.get('api_key', '')
+        config_obj = EvolutionConfig.objects.first()
+        evo_url = integration.config.get('evolution_url', '') or (config_obj.url if config_obj else '')
+        api_key = integration.config.get('api_key', '') or (config_obj.api_key if config_obj else '')
 
         if not evo_url or not api_key:
             return Response(
-                {'error': 'URL da Evolution API e API Key são obrigatórios para testar a conexão'},
+                {'error': 'Configure a URL e API Key da Evolution nas configurações globais'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -76,8 +101,12 @@ class IntegrationViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         integration = self.get_object()
         if integration.provider != 'evolution':
             return Response({'error': 'Provider must be evolution'}, status=status.HTTP_400_BAD_REQUEST)
-        if not integration.config.get('evolution_url') or not integration.config.get('api_key'):
-            return Response({'error': 'Configure evolution_url and api_key first'}, status=status.HTTP_400_BAD_REQUEST)
+        config_obj = EvolutionConfig.objects.first()
+        if not config_obj:
+            return Response(
+                {'error': 'Configure a URL e API Key da Evolution nas configurações globais'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         from .services.evolution_service import EvolutionService
         svc = EvolutionService(integration)

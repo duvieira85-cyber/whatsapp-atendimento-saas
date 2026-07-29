@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import Integration
+from .models import Integration, EvolutionConfig
+
+
+class EvolutionConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EvolutionConfig
+        fields = ['url', 'api_key']
 
 
 class IntegrationSerializer(serializers.ModelSerializer):
@@ -16,4 +22,4 @@ class IntegrationSerializer(serializers.ModelSerializer):
 class IntegrationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Integration
-        fields = ['provider', 'name', 'config', 'webhook_url']
+        fields = ['name']
