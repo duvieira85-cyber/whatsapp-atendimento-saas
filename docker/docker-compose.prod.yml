@@ -101,8 +101,8 @@ services:
       context: ..
       dockerfile: docker/frontend/Dockerfile.prod
       args:
-        VITE_API_URL: ${VITE_API_URL:-https://whatsapp.insights-software.dev.br/api}
-        VITE_WS_URL: ${VITE_WS_URL:-wss://whatsapp.insights-software.dev.br/ws}
+        VITE_API_URL: ${API_URL:-https://sos-whats-atendimento.insights-software.dev.br/api}
+        VITE_WS_URL: ${WS_URL:-wss://sos-whats-atendimento.insights-software.dev.br/ws}
     image: whatsapp-frontend:latest
     container_name: whatsapp-frontend
     restart: unless-stopped
@@ -146,7 +146,7 @@ services:
       AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}"
       AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
       QRCODE_LIMIT: "30"
-      WEBHOOK_GLOBAL_URL: "${EVOLUTION_WEBHOOK_BASE_URL:-https://whatsapp.insights-software.dev.br}/api/integrations/webhooks/evolution/"
+      WEBHOOK_GLOBAL_URL: "${EVOLUTION_WEBHOOK_BASE_URL:-https://sos-whats-atendimento.insights-software.dev.br}/api/integrations/webhooks/evolution/"
       WEBHOOK_GLOBAL_ENABLED: "true"
       WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
       WEBHOOK_EVENTS_APPLICATION_STARTUP: "false"
@@ -178,6 +178,8 @@ services:
     image: nginx:1.25-alpine
     container_name: whatsapp-nginx
     restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-sos-whats-atendimento.insights-software.dev.br}
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf
       - backend_static:/static:ro
@@ -191,6 +193,7 @@ services:
     depends_on:
       - backend
       - frontend
+    command: /bin/sh -c "sed -i 's/__DOMAIN__/'$$DOMAIN'/g' /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
     logging:
       driver: "json-file"
       options:

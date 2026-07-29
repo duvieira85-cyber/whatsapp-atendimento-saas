@@ -4,7 +4,7 @@
 
 - Docker + Docker Compose instalados na VPS
 - Git instalado
-- Dominio apontado para o servidor (ex: `whatsapp.insights-software.dev.br`)
+- Dominio apontado para o servidor (ex: `sos-whats-atendimento.insights-software.dev.br`)
 - Cloudflare ou outro DNS configurado (SSL recomendado via Cloudflare)
 
 ## Estrutura de diretorios na VPS
@@ -14,18 +14,39 @@
 └── whatsapp-atendimento/
     ├── backend/
     │   └── .env.production
-    ├── docker/
-    │   └── docker-compose.yml  (link simbolico ou copia do dev)
-    └── .env.production
+    └── docker/
+        └── docker-compose.prod.yml
 ```
 
 ## Variaveis de ambiente
 
-Criar `backend/.env.production`:
+**Todas as referencias de dominio sao externas ao codigo.**
+
+Para mudar o dominio no futuro, altere apenas:
+
+1. `APP_URL` e `DOMAIN` no `.env.production` da raiz
+2. Variaveis nos arquivos `backend/.env.production` e `frontend/.env.production`
+3. O DNS (Cloudflare)
+4. Nenhuma alteracao de codigo-fonte e necessaria
+
+### Arquivo raiz `.env.production`
+
+```ini
+APP_URL=https://sos-whats-atendimento.insights-software.dev.br
+DOMAIN=sos-whats-atendimento.insights-software.dev.br
+FRONTEND_URL=${APP_URL}
+API_URL=${APP_URL}/api
+WS_URL=wss://${DOMAIN}/ws
+DB_PASSWORD=<senha segura>
+EVOLUTION_API_KEY=<chave secreta>
+DJANGO_SECRET_KEY=<gerar random 64 caracteres>
+```
+
+### Arquivo `backend/.env.production`
 
 ```ini
 DEBUG=False
-SECRET_KEY=<gerar random de 64 caracteres>
+SECRET_KEY=<gerar random 64 caracteres>
 ALLOWED_HOSTS=.insights-software.dev.br,localhost
 DB_NAME=whatsapp_service
 DB_USER=whatsapp_user
@@ -34,10 +55,18 @@ DB_HOST=db
 DB_PORT=5432
 REDIS_HOST=redis
 REDIS_PORT=6379
-CORS_ALLOWED_ORIGINS=https://whatsapp.insights-software.dev.br
-CSRF_TRUSTED_ORIGINS=https://whatsapp.insights-software.dev.br
-EVOLUTION_WEBHOOK_BASE_URL=https://whatsapp.insights-software.dev.br
-EVOLUTION_API_KEY=<chave secreta da evolution>
+FRONTEND_URL=https://sos-whats-atendimento.insights-software.dev.br
+CORS_ALLOWED_ORIGINS=https://sos-whats-atendimento.insights-software.dev.br
+CSRF_TRUSTED_ORIGINS=https://sos-whats-atendimento.insights-software.dev.br
+EVOLUTION_WEBHOOK_BASE_URL=https://sos-whats-atendimento.insights-software.dev.br
+EVOLUTION_API_KEY=<chave secreta>
+```
+
+### Arquivo `frontend/.env.production`
+
+```ini
+VITE_API_URL=https://sos-whats-atendimento.insights-software.dev.br/api
+VITE_WS_URL=wss://sos-whats-atendimento.insights-software.dev.br/ws
 ```
 
 ## Primeiro deploy
@@ -48,7 +77,7 @@ cd /opt
 git clone https://github.com/duvieira85-cyber/whatsapp-atendimento-saas.git whatsapp-atendimento
 cd whatsapp-atendimento
 
-# 2. Criar arquivo de env production
+# 2. Criar arquivos de env
 cp backend/.env.production.example backend/.env.production
 nano backend/.env.production   # preencher valores reais
 
@@ -109,7 +138,7 @@ docker run --rm -v whatsapp_backend_media:/data -v $(pwd):/backup alpine tar xzf
 
 ### Configuracoes
 
-O `backend/.env.production` deve ter copia de seguranca externa (nao versionar no git).
+Os arquivos `.env.production` devem ter copia de seguranca externa (nao versionar no git).
 
 ## Recuperacao
 
@@ -118,7 +147,8 @@ Em caso de falha total:
 ```bash
 cd /opt/whatsapp-atendimento
 git pull
-docker compose -f docker/docker-compose.prod.yml down -v   # CUIDADO: remove volumes
+docker compose -f docker/docker-compose.prod.yml down
+# CUIDADO: Nao use -v a menos que queira perder dados
 # Restaurar backup do banco primeiro
 docker compose -f docker/docker-compose.prod.yml up -d db
 # Aguardar db ficar saudavel
@@ -139,3 +169,19 @@ docker compose -f docker/docker-compose.prod.yml logs -f nginx
 docker exec whatsapp-nginx tail -f /var/log/nginx/access.log
 docker exec whatsapp-nginx tail -f /var/log/nginx/error.log
 ```
+
+## Cloudflare
+
+Registro DNS:
+
+```
+Tipo: CNAME
+Nome: sos-whats-atendimento
+Alvo: <ip-da-vps>
+Proxy: Ativado (laranja) — para SSL
+```
+
+SSL mode: **Full (strict)** ou **Flexible**
+
+- Flexible: Cloudflare faz HTTPS com o cliente, HTTP com o servidor (porta 8080)
+- O Nginx do WhatsApp escuta na porta 8080 para HTTP
