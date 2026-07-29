@@ -185,8 +185,8 @@ services:
       - backend_media:/media:ro
       - logs:/var/log/nginx
     networks:
-      - whatsapp_network
-      - name: food_platform
+      whatsapp_network:
+      food_platform:
         aliases:
           - whatsapp-nginx
     ports:
